@@ -1,0 +1,409 @@
+"""
+IMPROVED Chat Controller - Uses unified search and retrieval orchestrator.
+Clean separation of concerns.
+"""
+from typing import List, Optional
+from pathlib import Path
+import logging
+import uuid
+from datetime import datetime
+
+from app.repositories import ChatRepository
+from app.schemas import (
+    ChatMessage,
+    ChatSession,
+    ChatResponse,
+    ImageSearchResult,
+)
+from app.utils.exceptions import ChatNotFoundError, ValidationError
+from app.services.search_service import UnifiedSearchService
+from app.services.retrieval_service import RetrievalOrchestrator
+
+logger = logging.getLogger(__name__)
+
+
+class ChatController:
+    """
+    Chat controller with unified search across text, tables, and images.
+    Delegates search to UnifiedSearchService and retrieval to RetrievalOrchestrator.
+    """
+    
+    def __init__(
+        self,
+        chat_repo: ChatRepository,
+        indexer,
+        llm_service,
+        settings,
+        document_repo
+    ):
+        self.chat_repo = chat_repo
+        self.indexer = indexer
+        self.llm = llm_service
+        self.settings = settings
+        self.document_repo = document_repo
+        
+        # Initialize new services
+        self.search_service = UnifiedSearchService(
+            indexer=indexer,
+            embed_model=indexer.embed_model
+        )
+        self.retrieval_service = RetrievalOrchestrator(
+            document_repo=document_repo
+        )
+    
+    async def send_message(
+        self,
+        message: str,
+        chat_id: Optional[str] = None,
+        category_ids: Optional[List[str]] = None,
+        image_paths: Optional[List[str]] = None,
+        top_k: int = 10
+    ) -> ChatResponse:
+        """
+        Send a message and get a response.
+        
+        IMPROVED:
+        - Uses UnifiedSearchService for automatic search across all collections
+        - Uses RetrievalOrchestrator to fetch actual objects by ID
+        - Clean separation: search → retrieve → generate
+        """
+        # Validate
+        if image_paths and len(image_paths) > self.settings.max_chat_images:
+            raise ValidationError(
+                f"Maximum {self.settings.max_chat_images} images allowed"
+            )
+        
+        # Create/get chat session
+        is_new_chat = chat_id is None
+        if is_new_chat:
+            chat_id = f"chat_{uuid.uuid4().hex[:12]}"
+            await self.chat_repo.create(chat_id, category_ids)
+        else:
+            existing_chat = await self.chat_repo.get_by_id(chat_id)
+            if not existing_chat:
+                raise ChatNotFoundError(chat_id)
+            if category_ids is None:
+                category_ids = existing_chat.category_ids
+        
+        # Create user message
+        user_message_id = f"msg_{uuid.uuid4().hex[:12]}"
+        user_message = ChatMessage(
+            message_id=user_message_id,
+            role="user",
+            content=message,
+            image_paths=image_paths or [],
+            timestamp=datetime.utcnow()
+        )
+        
+        await self.chat_repo.add_message(chat_id, user_message)
+        
+        # Get context window
+        context_messages = await self.chat_repo.get_recent_messages(
+            chat_id,
+            limit=self.settings.chat_context_window
+        )
+        
+        # Initialize services
+        self.indexer.initialize()
+        self.llm.initialize()
+        
+        # ========================================
+        # STEP 1: UNIFIED SEARCH
+        # ========================================
+        query_image_data = None
+        if image_paths:
+            # Load first image for search
+            try:
+                import base64
+                with open(image_paths[0], "rb") as f:
+                    query_image_data = base64.b64encode(f.read()).decode()
+            except:
+                pass
+        
+        search_results = self.search_service.search(
+            query_text=message,
+            query_image_data=query_image_data,
+            top_k=top_k,
+            category_ids=category_ids,
+            search_text=True,
+            search_tables=True,
+            search_images=True
+        )
+        
+        logger.info(f"Unified search returned {len(search_results)} results")
+        
+        # ========================================
+        # STEP 2: ENRICH - Get actual objects
+        # ========================================
+        enriched = await self.retrieval_service.enrich_search_results(
+            search_results
+        )
+        
+        text_chunks = enriched["text_chunks"]
+        tables = enriched["tables"]
+        images_from_search = enriched["images"]
+        
+        logger.info(
+            f"Enriched: {len(text_chunks)} text, "
+            f"{len(tables)} tables, {len(images_from_search)} images"
+        )
+        
+        # ========================================
+        # STEP 3: Prepare image paths for LLM
+        # ========================================
+        all_image_paths = []
+        
+        # Images from search results
+        for img in images_from_search:
+            if img.image_path and Path(img.image_path).exists():
+                all_image_paths.append(img.image_path)
+        
+        # Limit to avoid token overflow
+        all_image_paths = all_image_paths[:3]
+        
+        logger.info(f"Prepared {len(all_image_paths)} images for LLM: {all_image_paths}")
+        logger.info(f"User uploaded images: {image_paths}")  # Log user images too
+        
+        # ========================================
+        # STEP 4: Build chat history
+        # ========================================
+        chat_history = self._build_chat_context(context_messages[:-1])
+        
+        # ========================================
+        # STEP 5: Generate response
+        # ========================================
+        try:
+            enhanced_query = (
+                f"Previous conversation:\n{chat_history}\n\n"
+                f"Current question: {message}"
+                if chat_history
+                else message
+            )
+            
+            # Convert text_chunks to RetrievedChunk format
+            from app.schemas import RetrievedChunk
+            
+            retrieved_chunks = []
+            for result in text_chunks:
+                retrieved_chunks.append(
+                    RetrievedChunk(
+                        chunk_id=result.chunk_id or "",
+                        content=result.content,
+                        score=result.score,
+                        section_title=result.section_title,
+                        page_start=result.page_number,
+                        page_end=result.page_number,
+                        images=[],
+                        tables=[]
+                    )
+                )
+            
+            answer = await self.llm.generate_multimodal_response(
+                query=enhanced_query,
+                context_chunks=retrieved_chunks,
+                tables=tables,
+                retrieved_images=images_from_search,  # Changed: Pass objects
+                user_uploaded_images=image_paths,
+                max_retrieved_images=3,
+                max_user_images=5
+            )
+            
+            logger.info("Response generated successfully")
+            
+        except Exception as e:
+            logger.error(f"LLM generation failed: {e}")
+            answer = "I apologize, but I couldn't generate a response. Please try again."
+        
+        # ========================================
+        # STEP 6: Build sources metadata
+        # ========================================
+        sources = await self._build_sources(search_results, category_ids)
+        
+        # ========================================
+        # STEP 7: Create assistant message
+        # ========================================
+        assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
+        assistant_message = ChatMessage(
+            message_id=assistant_message_id,
+            role="assistant",
+            content=answer,
+            image_paths=[],
+            sources=sources,
+            timestamp=datetime.utcnow()
+        )
+        
+        await self.chat_repo.add_message(chat_id, assistant_message)
+        
+        # Build image results
+        image_results = [
+            ImageSearchResult(
+                image_id=img.image_id,
+                document_id=img.document_id,
+                page_number=img.page_number,
+                section_title=img.section_title or "",
+                caption=img.caption or "",
+                image_path=img.image_path,
+                score=0.0  # Score already used in ranking
+            )
+            for img in images_from_search
+        ]
+        
+        logger.info(f"Responding with {len(image_results)} image results")
+        
+        return ChatResponse(
+            chat_id=chat_id,
+            message_id=assistant_message_id,
+            answer=answer,
+            sources=sources,
+            image_results=image_results
+        )
+    
+    async def _build_sources(
+        self,
+        search_results,
+        category_ids: Optional[List[str]]
+    ) -> dict:
+        """
+        Build sources dict with metadata.
+        
+        Returns:
+            {
+                document_id: {
+                    "filename": str,
+                    "category_name": str,
+                    "pages": [int],
+                    "score": float,
+                    "contains": ["text", "table", "image"]
+                }
+            }
+        """
+        sources_map = {}
+        
+        for result in search_results:
+            doc_id = result.document_id
+            
+            if doc_id not in sources_map:
+                # Get document metadata
+                try:
+                    doc = await self.document_repo.get_by_id(doc_id)
+                    
+                    category_name = None
+                    if doc and doc.category_id:
+                        from app.core.dependencies import container
+                        category = await container.category_repo.get_by_id(
+                            doc.category_id
+                        )
+                        category_name = category.name if category else None
+                    
+                    sources_map[doc_id] = {
+                        "document_id": doc_id,
+                        "filename": doc.filename if doc else "Unknown",
+                        "category_id": doc.category_id if doc else None,
+                        "category_name": category_name,
+                        "pages": set(),
+                        "max_score": 0.0,
+                        "source_types": set()
+                    }
+                except Exception as e:
+                    logger.warning(f"Could not get doc metadata for {doc_id}: {e}")
+                    sources_map[doc_id] = {
+                        "document_id": doc_id,
+                        "filename": "Unknown",
+                        "category_id": None,
+                        "category_name": None,
+                        "pages": set(),
+                        "max_score": 0.0,
+                        "source_types": set()
+                    }
+            
+            # Add page
+            sources_map[doc_id]["pages"].add(result.page_number)
+            
+            # Update max score
+            sources_map[doc_id]["max_score"] = max(
+                sources_map[doc_id]["max_score"],
+                result.score
+            )
+            
+            # Track source type
+            sources_map[doc_id]["source_types"].add(result.source_type)
+        
+        # Format for response
+        formatted_sources = {}
+        for doc_id, data in sorted(
+            sources_map.items(),
+            key=lambda x: x[1]["max_score"],
+            reverse=True
+        ):
+            formatted_sources[doc_id] = {
+                "filename": data["filename"],
+                "category_id": data["category_id"],
+                "category_name": data["category_name"],
+                "pages": sorted(list(data["pages"])),
+                "score": data["max_score"],
+                "contains": list(data["source_types"])
+            }
+        
+        return formatted_sources
+    
+    def _build_chat_context(self, messages: List[ChatMessage]) -> str:
+        """Build context from chat history."""
+        context_parts = []
+        for msg in messages:
+            role = "User" if msg.role == "user" else "Assistant"
+            context_parts.append(f"{role}: {msg.content}")
+            if msg.image_paths:
+                context_parts.append(f"  [Attached {len(msg.image_paths)} image(s)]")
+        return "\n".join(context_parts)
+    
+    async def get_chat(self, chat_id: str) -> ChatSession:
+        """Get a chat session by ID."""
+        chat = await self.chat_repo.get_by_id(chat_id)
+        if not chat:
+            raise ChatNotFoundError(chat_id)
+        return chat
+    
+    async def list_chats(self, limit: int = 50) -> List[ChatSession]:
+        """List all chat sessions."""
+        return await self.chat_repo.get_all(limit=limit)
+    
+    async def delete_chat(self, chat_id: str) -> bool:
+        """Delete a chat session and its images."""
+        chat = await self.chat_repo.get_by_id(chat_id)
+        if not chat:
+            raise ChatNotFoundError(chat_id)
+        
+        chat_dir = self.settings.chat_images_dir / chat_id
+        if chat_dir.exists():
+            import shutil
+            shutil.rmtree(chat_dir)
+            logger.info(f"Deleted chat images: {chat_dir}")
+        
+        return await self.chat_repo.delete(chat_id)
+    
+    async def save_uploaded_images(
+        self,
+        images: list,
+        chat_id: str
+    ) -> List[str]:
+        """Save uploaded images and return paths."""
+        saved_paths = []
+        chat_dir = self.settings.chat_images_dir / chat_id
+        chat_dir.mkdir(parents=True, exist_ok=True)
+        
+        for img in images:
+            if not img.filename:
+                continue
+            
+            ext = Path(img.filename).suffix or ".jpg"
+            filename = f"{uuid.uuid4().hex}{ext}"
+            file_path = chat_dir / filename
+            
+            content = await img.read()
+            with open(file_path, "wb") as f:
+                f.write(content)
+            
+            saved_paths.append(str(file_path))
+            logger.info(f"Saved chat image: {file_path}")
+        
+        return saved_paths
