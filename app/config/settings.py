@@ -43,12 +43,12 @@ class Settings(BaseSettings):
     qdrant_api_key: str = Field(default="", alias="QDRANT_API_KEY")
     
     # MongoDB Collection Names
-    documents_collection: str = "documents"
-    categories_collection: str = "categories"
-    chunks_collection: str = "chunks"
-    images_collection: str = "images"
-    tables_collection: str = "tables"
-    chats_collection: str = "chats"
+    documents_collection: str = "rag_documents"
+    categories_collection: str = "rag_categories"
+    chunks_collection: str = "rag_chunks"
+    images_collection: str = "rag_images"
+    tables_collection: str = "rag_tables"
+    chats_collection: str = "rag_chats"
     
     # Chat Configuration
     chat_images_dir: Path = Field(default=Path("./chat_images"), alias="CHAT_IMAGES_DIR")
