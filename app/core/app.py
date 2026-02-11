@@ -89,13 +89,15 @@ def _include_routers(app: FastAPI) -> None:
         category_router,
         document_router,
         query_router,
-        chat_router
+        chat_router,
+        batch_router
     )
     
     app.include_router(category_router.router)
     app.include_router(document_router.router)
     app.include_router(query_router.router)
     app.include_router(chat_router.router)
+    app.include_router(batch_router.router)
 
 
 def _register_root_endpoints(app: FastAPI) -> None:

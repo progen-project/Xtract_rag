@@ -1,0 +1,46 @@
+{
+  "ChatRequest": {
+    "description": "Request body for chat endpoint (often sent as FormData if uploading images).",
+    "example": {
+      "message": "Explain this document",
+      "chat_id": "optional_chat_id",
+      "category_ids": ["cat_finance"],
+      "top_k": 5
+    }
+  },
+  "ChatResponse": {
+    "description": "Response containing the assistant's answer and sources.",
+    "example": {
+      "chat_id": "chat_123abc",
+      "message_id": "msg_456def",
+      "answer": "This document discusses...",
+      "sources": {
+        "doc_1234567890ab": [1, 2]
+      },
+      "image_results": []
+    }
+  },
+  "ChatSession": {
+    "description": "Full chat history and metadata.",
+    "example": {
+      "chat_id": "chat_123abc",
+      "category_ids": ["cat_finance"],
+      "created_at": "2023-10-27T10:00:00.123456",
+      "updated_at": "2023-10-27T10:05:00.123456",
+      "messages": [
+        {
+          "message_id": "msg_user_1",
+          "role": "user",
+          "content": "Hello",
+          "timestamp": "2023-10-27T10:00:00.123456"
+        },
+        {
+          "message_id": "msg_assistant_1",
+          "role": "assistant",
+          "content": "Hi there!",
+          "timestamp": "2023-10-27T10:00:01.123456"
+        }
+      ]
+    }
+  }
+}

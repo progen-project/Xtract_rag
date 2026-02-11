@@ -1,0 +1,41 @@
+{
+  "DocumentUploadResponse": {
+    "description": "Response array returned after uploading documents.",
+    "example": [
+      {
+        "document_id": "doc_1234567890ab",
+        "category_id": "cat_finance",
+        "filename": "annual_report.pdf",
+        "message": "Document uploaded. Processing started.",
+        "status": "pending",
+        "batch_id": "batch_9876543210zy"
+      }
+    ]
+  },
+  "DocumentMetadata": {
+    "description": "Full metadata of a document.",
+    "example": {
+      "document_id": "doc_1234567890ab",
+      "category_id": "cat_finance",
+      "filename": "annual_report.pdf",
+      "file_path": "uploads/finance/uuid_annual_report.pdf",
+      "file_size": 102400,
+      "page_count": 0,
+      "upload_date": "2023-10-27T10:00:00.123456",
+      "status": "processing",
+      "batch_id": "batch_9876543210zy",
+      "toc": [],
+      "processing_errors": []
+    }
+  },
+  "SSEProgressEvent": {
+    "description": "Event data streamed from /upload/progress/{batch_id}",
+    "example": {
+      "batch_id": "batch_9876543210zy",
+      "filename": "annual_report.pdf",
+      "status": "indexing",
+      "detail": "Indexing 45 chunks...",
+      "timestamp": "2023-10-27T10:00:05.123456"
+    }
+  }
+}

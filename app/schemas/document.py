@@ -26,6 +26,8 @@ class DocumentMetadata(BaseModel):
     page_count: int
     upload_date: datetime = Field(default_factory=datetime.utcnow)
     status: DocumentStatus = DocumentStatus.PENDING
+    batch_id: Optional[str] = None
+    is_daily: bool = Field(default=False, description="If True, document is deleted after 24 hours")
     toc: List[TOCEntry] = Field(default_factory=list)
     processing_errors: List[str] = Field(default_factory=list)
 
@@ -37,6 +39,7 @@ class DocumentUploadResponse(BaseModel):
     filename: str
     message: str
     status: DocumentStatus
+    batch_id: Optional[str] = None
 
 
 class ExtractedImage(BaseModel):

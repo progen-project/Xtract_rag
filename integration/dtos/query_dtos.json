@@ -1,0 +1,59 @@
+{
+  "QueryRequest": {
+    "description": "Request for simple RAG query.",
+    "example": {
+      "query": "What is the net profit?",
+      "category_ids": ["cat_finance"],
+      "document_ids": [],
+      "top_k": 5,
+      "include_images": true,
+      "include_tables": true
+    }
+  },
+  "QueryResponse": {
+    "description": "Response containing retrieved chunks and generated answer.",
+    "example": {
+      "query": "What is the net profit?",
+      "answer": "The net profit is $1.5M.",
+      "retrieved_chunks": [
+        {
+          "chunk_id": "chunk_123",
+          "content": "Net profit was $1.5M...",
+          "score": 0.95,
+          "section_title": "Financial Summary",
+          "page_start": 5,
+          "page_end": 5,
+          "images": [],
+          "tables": []
+        }
+      ],
+      "sources": ["doc_1234567890ab"]
+    }
+  },
+  "ImageSearchRequest": {
+    "description": "Request to search for images by text or image content.",
+    "example": {
+      "query_text": "graph showing revenue",
+      "category_ids": ["cat_finance"],
+      "top_k": 5
+    }
+  },
+  "ImageSearchResponse": {
+    "description": "List of matching images.",
+    "example": {
+      "query_text": "graph showing revenue",
+      "has_query_image": false,
+      "count": 1,
+      "results": [
+        {
+          "image_id": "img_789",
+          "document_id": "doc_123",
+          "page_number": 6,
+          "caption": "Revenue Growth 2023",
+          "image_path": "extracted_images/img_789.png",
+          "score": 0.88
+        }
+      ]
+    }
+  }
+}

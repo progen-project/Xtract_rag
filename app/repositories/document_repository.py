@@ -91,6 +91,34 @@ class DocumentRepository:
         
         return result.modified_count > 0
     
+    async def get_by_batch_id(self, batch_id: str) -> List[DocumentMetadata]:
+        """Get documents by batch ID."""
+        logger.debug(f"Fetching documents for batch: {batch_id}")
+        cursor = self.documents_collection.find({"batch_id": batch_id})
+        documents = []
+        async for doc in cursor:
+            doc["document_id"] = doc.pop("_id")
+            documents.append(DocumentMetadata(**doc))
+        return documents
+
+    async def get_older_than(self, cutoff_time: datetime, is_daily: bool = None) -> List[DocumentMetadata]:
+        """
+        Get documents uploaded before the cutoff time.
+        :param cutoff_time: Datetime threshold.
+        :param is_daily: If True, only get daily docs. If False, only get permanent docs. If None, get all.
+        """
+        query = {"upload_date": {"$lt": cutoff_time}}
+        if is_daily is not None:
+            query["is_daily"] = is_daily
+            
+        logger.debug(f"Fetching documents older than {cutoff_time} with is_daily={is_daily}")
+        cursor = self.documents_collection.find(query)
+        documents = []
+        async for doc in cursor:
+            doc["document_id"] = doc.pop("_id")
+            documents.append(DocumentMetadata(**doc))
+        return documents
+    
     async def delete(self, document_id: str) -> bool:
         """Delete a document and all related data."""
         # Delete images

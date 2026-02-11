@@ -25,6 +25,9 @@ from app.services.chunker import SectionChunker
 from app.services.image_embedder import image_embedder
 
 
+from app.services.status import ProcessingStatusManager  # Added
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,6 +56,7 @@ class Container:
         self.pdf_parser = DoclingParser()
         self.chunker = SectionChunker()
         self.image_embedder = image_embedder
+        self.status_manager = ProcessingStatusManager()  # Added status manager
     
     async def initialize(self) -> None:
         """Initialize all components (called at startup)."""
@@ -92,6 +96,7 @@ class Container:
             image_embedder=self.image_embedder,
             settings=self.settings,
             llm_service=self.llm,  # Added LLM service
+            status_manager=self.status_manager  # Added status manager
         )
         
         self.query_controller = QueryController(
@@ -146,3 +151,8 @@ def get_query_controller() -> QueryController:
 def get_chat_controller() -> ChatController:
     """Dependency for chat controller."""
     return container.chat_controller
+
+
+def get_status_manager() -> ProcessingStatusManager:  # Added dependency
+    """Dependency for status manager."""
+    return container.status_manager
