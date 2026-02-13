@@ -8,7 +8,7 @@ from typing import List
 
 from app.core.dependencies import get_category_controller
 from app.controllers import CategoryController
-from app.schemas import CategoryCreate, CategoryResponse
+from app.schemas import CategoryCreate, CategoryUpdate, CategoryResponse
 
 router = APIRouter(prefix="/api/categories", tags=["Categories"])
 
@@ -37,6 +37,20 @@ async def get_category(
 ):
     """Get a specific category."""
     return await controller.get_category(category_id)
+
+
+@router.put("/{category_id}", response_model=CategoryResponse)
+async def update_category(
+    category_id: str,
+    request: CategoryUpdate,
+    controller: CategoryController = Depends(get_category_controller)
+):
+    """Update a category (Rename/Description)."""
+    return await controller.update_category(
+        category_id, 
+        name=request.name, 
+        description=request.description
+    )
 
 
 @router.delete("/{category_id}")

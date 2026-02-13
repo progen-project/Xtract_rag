@@ -21,6 +21,12 @@ class CategoryCreate(BaseModel):
     description: Optional[str] = None
 
 
+class CategoryUpdate(BaseModel):
+    """Request to update a category."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
 class CategoryResponse(BaseModel):
     """Response for category operations."""
     category_id: str
