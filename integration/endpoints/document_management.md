@@ -45,6 +45,49 @@ data: {"type": "initial_state", "batch_id": "batch_abc", "files": {...}}
 data: {"batch_id": "batch_abc", "filename": "file.pdf", "status": "processing", "detail": "Starting..."}
 ```
 
+#### Detailed Usage Guide
+
+**JavaScript (Frontend)**:
+Use the native `EventSource` API.
+```javascript
+const batchId = "your_batch_id";
+const evtSource = new EventSource(`/api/batches/${batchId}/progress`);
+
+evtSource.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    
+    if (data.type === 'initial_state') {
+        console.log("Initial State:", data.files);
+    } else {
+        console.log(`Update for ${data.filename}: ${data.status} - ${data.detail}`);
+        // Update UI progress bar here
+    }
+};
+
+evtSource.onerror = (err) => {
+    console.error("EventSource failed:", err);
+    evtSource.close();
+};
+```
+
+**Python (Client)**:
+Use `requests` with `stream=True`.
+```python
+import requests
+import json
+
+batch_id = "your_batch_id"
+url = f"http://localhost:8000/api/batches/{batch_id}/progress"
+
+with requests.get(url, stream=True) as response:
+    for line in response.iter_lines():
+        if line:
+            decoded_line = line.decode('utf-8')
+            if decoded_line.startswith("data: "):
+                event_data = json.loads(decoded_line[6:])
+                print(event_data)
+```
+
 ### 4. Get Batch Status (Snapshot)
 **GET** `/api/batches/{batch_id}`
 
