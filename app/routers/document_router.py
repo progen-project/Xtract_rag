@@ -4,7 +4,7 @@ Document API router.
 Thin router that delegates to DocumentController.
 """
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, BackgroundTasks
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from typing import List, Optional
 import uuid
 from pathlib import Path
@@ -223,3 +223,25 @@ async def delete_document(
     """Delete a document."""
     await controller.delete_document(document_id)
     return {"message": f"Document {document_id} deleted"}
+
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: str,
+    controller: DocumentController = Depends(get_document_controller)
+):
+    """Download a document file."""
+    # Get metadata
+    doc = await controller.get_document(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    file_path = Path(doc.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on server")
+        
+    return FileResponse(
+        path=file_path,
+        filename=doc.filename,
+        media_type="application/pdf"
+    )

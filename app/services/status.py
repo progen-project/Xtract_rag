@@ -7,6 +7,11 @@ from collections import defaultdict
 import json
 from datetime import datetime
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class ProcessingStatusManager:
     """
     Singleton service to track file processing status in memory.

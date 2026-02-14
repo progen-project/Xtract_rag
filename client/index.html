@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PetroRAG Client</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <i class="fa-solid fa-layer-group"></i> PetroRAG
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-title">Categories</div>
+      <div id="category-list">
+        <!-- Categories will be injected here -->
+      </div>
+      <button class="add-btn" onclick="openModal('create-category-modal')">
+        <i class="fa-solid fa-plus"></i> New Category
+      </button>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-title">Chats</div>
+      <div id="chat-list">
+        <!-- Chats will be injected here -->
+      </div>
+      <button class="add-btn" onclick="startNewChat()">
+        <i class="fa-solid fa-plus"></i> New Chat
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-title">
+        <h2 id="page-title">Dashboard</h2>
+        <div id="page-subtitle" class="text-muted">Select a category or chat to begin</div>
+      </div>
+      <div class="header-actions" id="header-actions">
+        <!-- Dynamic keys based on view -->
+      </div>
+    </header>
+
+    <!-- Views -->
+
+    <!-- 1. Dashboard / Empty State -->
+    <div id="view-dashboard" class="view active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-categories">0</div>
+          <div class="stat-label">Total Categories</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-documents">0</div>
+          <div class="stat-label">Total Documents</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-chats">0</div>
+          <div class="stat-label">Active Chats</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Category View -->
+    <div id="view-category" class="view">
+      <div class="upload-section">
+        <div class="upload-area" id="drop-zone">
+          <i class="fa-solid fa-cloud-arrow-up"
+            style="font-size: 2rem; margin-bottom: 1rem; color: var(--text-muted);"></i>
+          <h3>Click to Upload Documents</h3>
+          <p style="color: var(--text-muted); font-size: 0.875rem;">Supports PDF. Max 50 files.</p>
+          <input type="file" id="file-input" multiple hidden accept=".pdf">
+
+          <div style="margin-top: 1rem;">
+            <label>
+              <input type="checkbox" id="is-daily"> Daily Upload (Auto-delete in 24h)
+            </label>
+          </div>
+        </div>
+
+        <div class="progress-bar-container" id="upload-progress-container">
+          <div class="progress-bar" id="upload-progress-bar"></div>
+        </div>
+        <div id="upload-status-text"
+          style="text-align: center; margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-muted);"></div>
+      </div>
+
+      <div style="margin-top: 2rem;">
+        <!-- Batch Controls will appear here if active -->
+        <div id="batch-controls" class="hidden"
+          style="margin-bottom: 1rem; padding: 1rem; background: rgba(99, 102, 241, 0.1); border-radius: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <span><i class="fa-solid fa-spinner fa-spin"></i> Processing Batch...</span>
+          <button class="btn btn-danger" onclick="terminateCurrentBatch()">Terminate Batch</button>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3>Documents</h3>
+          <div style="gap: 0.5rem; display: flex;">
+            <button class="btn btn-secondary" onclick="refreshDocuments()"><i
+                class="fa-solid fa-rotate-right"></i></button>
+            <button class="btn btn-danger" onclick="cleanupDaily()">Cleanup Daily</button>
+          </div>
+        </div>
+
+        <table class="documents-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Type</th>
+              <th>Added</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="documents-list">
+            <!-- Docs here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 3. Chat View -->
+    <div id="view-chat" class="view chat-view">
+      <div class="chat-container">
+        <div class="chat-messages" id="chat-messages">
+          <!-- Messages -->
+          <div class="message ai">
+            Hello! I am PetroRAG. Ask me anything about your uploaded documents.
+          </div>
+        </div>
+
+        <!-- Image Preview Area -->
+        <div id="chat-image-preview" class="chat-image-preview"
+          style="display: none; padding: 0.5rem 1.5rem; gap: 0.5rem; overflow-x: auto;"></div>
+
+        <div class="chat-input-area">
+          <input type="file" id="chat-image-input" multiple accept="image/*" hidden>
+          <button class="btn btn-secondary" onclick="document.getElementById('chat-image-input').click()"
+            title="Attach Images">
+            <i class="fa-solid fa-paperclip"></i>
+          </button>
+          <textarea class="chat-input" id="chat-input"
+            placeholder="Type your message... (Shift+Enter to send)"></textarea>
+          <button class="btn btn-primary" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modals -->
+  <!-- Create Category Modal -->
+  <div id="create-category-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>New Category</h3>
+        <button class="btn btn-secondary" onclick="closeModal('create-category-modal')"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" class="form-control" id="new-cat-name" placeholder="e.g. Finance 2024">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" class="form-control" id="new-cat-desc" placeholder="Optional description">
+      </div>
+      <button class="btn btn-primary" style="width: 100%" onclick="createCategory()">Create Category</button>
+    </div>
+  </div>
+
+  <!-- Rename Category Modal -->
+  <div id="rename-category-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Rename Category</h3>
+        <button class="btn btn-secondary" onclick="closeModal('rename-category-modal')"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <input type="hidden" id="rename-cat-id">
+      <div class="form-group">
+        <label>New Name</label>
+        <input type="text" class="form-control" id="rename-cat-name">
+      </div>
+      <div class="form-group">
+        <label>New Description</label>
+        <input type="text" class="form-control" id="rename-cat-desc">
+      </div>
+      <button class="btn btn-primary" style="width: 100%" onclick="submitRenameCategory()">Save Changes</button>
+    </div>
+  </div>
+
+  <!-- New Chat Configuration Modal -->
+  <div id="new-chat-modal" class="modal">
+    <div class="modal-content" style="width: 500px;">
+      <div class="modal-header">
+        <h3>Start New Chat</h3>
+        <button class="btn btn-secondary" onclick="closeModal('new-chat-modal')"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div style="margin-bottom: 1.5rem;">
+        <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Select Knowledge Context</label>
+        <div style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Choose which categories this chat should search across.
+        </div>
+
+        <div id="chat-category-selection"
+          style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.5rem;">
+          <!-- Categories checkboxes injected here -->
+        </div>
+
+        <div style="margin-top: 0.5rem; text-align: right;">
+          <a href="#" onclick="toggleSelectAllCategories(true)"
+            style="font-size: 0.8rem; color: var(--primary-color);">Select All</a> |
+          <a href="#" onclick="toggleSelectAllCategories(false)"
+            style="font-size: 0.8rem; color: var(--text-muted);">None</a>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" style="width: 100%" onclick="confirmStartChat()">
+        <i class="fa-solid fa-comments"></i> Start Conversation
+      </button>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>

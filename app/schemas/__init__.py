@@ -2,7 +2,7 @@
 Schemas module for PetroRAG.
 """
 from .common import DocumentStatus
-from .category import Category, CategoryCreate, CategoryResponse
+from .category import Category, CategoryCreate, CategoryResponse, CategoryUpdate
 from .document import (
     TOCEntry,
     DocumentMetadata,
@@ -36,6 +36,7 @@ __all__ = [
     "Category",
     "CategoryCreate",
     "CategoryResponse",
+    "CategoryUpdate",
     # Document
     "TOCEntry",
     "DocumentMetadata",

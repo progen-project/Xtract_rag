@@ -547,26 +547,42 @@ class Indexer:
         )
         
         try:
-            # Delete from text chunks
-            self.qdrant_client.delete(
-                collection_name=self.settings.qdrant_collection,
-                points_selector=filter_obj
-            )
+            import concurrent.futures
             
-            # Delete from tables
-            table_collection = f"{self.settings.qdrant_collection}_tables"
-            self.qdrant_client.delete(
-                collection_name=table_collection,
-                points_selector=filter_obj
-            )
-            
-            # Delete from images
-            image_collection = f"{self.settings.qdrant_collection}_images"
-            self.qdrant_client.delete(
-                collection_name=image_collection,
-                points_selector=filter_obj
-            )
-            
+            # Execute deletions in parallel to reduce waiting time
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                futures = []
+                
+                # 1. Text chunks
+                futures.append(executor.submit(
+                    self.qdrant_client.delete,
+                    collection_name=self.settings.qdrant_collection,
+                    points_selector=filter_obj
+                ))
+                
+                # 2. Tables
+                table_collection = f"{self.settings.qdrant_collection}_tables"
+                futures.append(executor.submit(
+                    self.qdrant_client.delete,
+                    collection_name=table_collection,
+                    points_selector=filter_obj
+                ))
+                
+                # 3. Images
+                image_collection = f"{self.settings.qdrant_collection}_images"
+                futures.append(executor.submit(
+                    self.qdrant_client.delete,
+                    collection_name=image_collection,
+                    points_selector=filter_obj
+                ))
+                
+                # Wait for all
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        logger.warning(f"One of the collection deletions failed: {e}")
+
             logger.info(f"Deleted all vectors for document {document_id}")
             return True
             

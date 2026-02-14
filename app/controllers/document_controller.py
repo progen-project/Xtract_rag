@@ -528,7 +528,8 @@ class DocumentController:
         
         # Delete from all vector collections
         try:
-            self.indexer.delete_document(document_id)
+            from starlette.concurrency import run_in_threadpool
+            await run_in_threadpool(self.indexer.delete_document, document_id)
         except Exception as e:
             logger.warning(f"Failed to delete from vector store: {e}")
         
