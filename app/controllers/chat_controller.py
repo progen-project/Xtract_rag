@@ -6,6 +6,7 @@ from typing import List, Optional
 from pathlib import Path
 import logging
 import uuid
+import re
 from datetime import datetime
 
 from app.repositories import ChatRepository
@@ -220,6 +221,13 @@ class ChatController:
         sources = await self._build_sources(search_results, category_ids)
         
         # ========================================
+        # STEP 6.5: Enrich inline citations
+        # ========================================
+        answer, inline_citations = self._enrich_inline_citations(
+            answer, retrieved_chunks, sources
+        )
+        
+        # ========================================
         # STEP 7: Create assistant message
         # ========================================
         assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -248,15 +256,246 @@ class ChatController:
             for img in images_from_search
         ]
         
-        logger.info(f"Responding with {len(image_results)} image results")
+        logger.info(f"Responding with {len(image_results)} image results, {len(inline_citations)} inline citations")
         
         return ChatResponse(
             chat_id=chat_id,
             message_id=assistant_message_id,
             answer=answer,
             sources=sources,
+            inline_citations=inline_citations,
             image_results=image_results
         )
+
+    async def send_message_stream(
+        self,
+        message: str,
+        chat_id: Optional[str] = None,
+        category_ids: Optional[List[str]] = None,
+        image_paths: Optional[List[str]] = None,
+        top_k: int = 10
+    ):
+        """
+        Streaming version of send_message.
+        Yields SSE-formatted strings: 'data: {"token": "..."}\n\n'
+        Final event: 'data: {"done": true, "chat_id": "...", ...}\n\n'
+        """
+        import json as json_mod
+
+        # Validate
+        if image_paths and len(image_paths) > self.settings.max_chat_images:
+            raise ValidationError(
+                f"Maximum {self.settings.max_chat_images} images allowed"
+            )
+
+        # Create/get chat session
+        is_new_chat = chat_id is None
+        if is_new_chat:
+            chat_id = f"chat_{uuid.uuid4().hex[:12]}"
+            await self.chat_repo.create(chat_id, category_ids)
+        else:
+            existing_chat = await self.chat_repo.get_by_id(chat_id)
+            if not existing_chat:
+                raise ChatNotFoundError(chat_id)
+            if category_ids is None:
+                category_ids = existing_chat.category_ids
+
+        # Create user message
+        user_message_id = f"msg_{uuid.uuid4().hex[:12]}"
+        user_message = ChatMessage(
+            message_id=user_message_id,
+            role="user",
+            content=message,
+            image_paths=image_paths or [],
+            timestamp=datetime.utcnow()
+        )
+        await self.chat_repo.add_message(chat_id, user_message)
+
+        # Get context window
+        context_messages = await self.chat_repo.get_recent_messages(
+            chat_id, limit=self.settings.chat_context_window
+        )
+
+        # Initialize services
+        self.indexer.initialize()
+        self.llm.initialize()
+
+        # STEP 1: UNIFIED SEARCH
+        query_image_data = None
+        if image_paths:
+            try:
+                import base64
+                with open(image_paths[0], "rb") as f:
+                    query_image_data = base64.b64encode(f.read()).decode()
+            except:
+                pass
+
+        search_results = self.search_service.search(
+            query_text=message,
+            query_image_data=query_image_data,
+            top_k=top_k,
+            category_ids=category_ids,
+            search_text=True,
+            search_tables=True,
+            search_images=True
+        )
+
+        # STEP 2: ENRICH
+        enriched = await self.retrieval_service.enrich_search_results(search_results)
+        text_chunks = enriched["text_chunks"]
+        tables = enriched["tables"]
+        images_from_search = enriched["images"]
+
+        # STEP 3: Prepare image paths
+        all_image_paths = []
+        for img in images_from_search:
+            if img.image_path and Path(img.image_path).exists():
+                all_image_paths.append(img.image_path)
+        all_image_paths = all_image_paths[:3]
+
+        # STEP 4: Build chat history
+        chat_history = self._build_chat_context(context_messages[:-1])
+
+        # STEP 5: Build chunks for LLM
+        from app.schemas import RetrievedChunk
+        enhanced_query = (
+            f"Previous conversation:\n{chat_history}\n\n"
+            f"Current question: {message}"
+            if chat_history else message
+        )
+
+        retrieved_chunks = []
+        for result in text_chunks:
+            retrieved_chunks.append(
+                RetrievedChunk(
+                    chunk_id=result.chunk_id or "",
+                    content=result.content,
+                    score=result.score,
+                    section_title=result.section_title,
+                    page_start=result.page_number,
+                    page_end=result.page_number,
+                    images=[],
+                    tables=[]
+                )
+            )
+
+        # STEP 6: Stream LLM response
+        full_answer = ""
+        try:
+            async for token in self.llm.generate_multimodal_response_stream(
+                query=enhanced_query,
+                context_chunks=retrieved_chunks,
+                tables=tables,
+                retrieved_images=images_from_search if all_image_paths else None,
+                user_uploaded_images=image_paths
+            ):
+                full_answer += token
+                yield f"data: {json_mod.dumps({'token': token})}\n\n"
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            yield f"data: {json_mod.dumps({'error': str(e)})}\n\n"
+            return
+
+        # STEP 7: Post-process (enrich citations on the full answer)
+        sources = await self._build_sources(search_results, category_ids)
+        answer, inline_citations = self._enrich_inline_citations(
+            full_answer, retrieved_chunks, sources
+        )
+
+        # STEP 8: Save assistant message
+        assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
+        assistant_message = ChatMessage(
+            message_id=assistant_message_id,
+            role="assistant",
+            content=answer,
+            image_paths=[],
+            sources=sources,
+            timestamp=datetime.utcnow()
+        )
+        await self.chat_repo.add_message(chat_id, assistant_message)
+
+        # Build image results
+        image_results = [
+            {
+                "image_id": img.image_id,
+                "document_id": img.document_id,
+                "page_number": img.page_number,
+                "section_title": img.section_title or "",
+                "caption": img.caption or "",
+                "image_path": img.image_path,
+                "score": 0.0
+            }
+            for img in images_from_search
+        ]
+
+        # STEP 9: Send final event with metadata
+        yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'message_id': assistant_message_id, 'answer': answer, 'sources': sources, 'inline_citations': inline_citations, 'image_results': image_results})}\n\n"
+    
+    def _enrich_inline_citations(
+        self,
+        answer: str,
+        context_chunks,
+        sources_map: dict
+    ) -> tuple:
+        """
+        Post-process the LLM answer to replace [Source N, Page X-Y] with
+        [filename.pdf, Page X-Y] and build a structured inline_citations list.
+        
+        Returns:
+            (enriched_answer, inline_citations_list)
+        """
+        inline_citations = []
+        
+        # Build chunk_index -> (doc_id, filename) mapping
+        chunk_doc_map = {}
+        for i, chunk in enumerate(context_chunks, 1):
+            doc_id = chunk.chunk_id.split("_chunk_")[0] if chunk.chunk_id else ""
+            source_info = sources_map.get(doc_id, {})
+            filename = source_info.get("filename", "Unknown") if isinstance(source_info, dict) else "Unknown"
+            chunk_doc_map[i] = {
+                "document_id": doc_id,
+                "filename": filename,
+                "section_title": chunk.section_title,
+                "page_start": chunk.page_start,
+                "page_end": chunk.page_end,
+            }
+        
+        def replace_citation(match):
+            source_num = int(match.group(1))
+            page_range = match.group(2)
+            
+            if source_num in chunk_doc_map:
+                info = chunk_doc_map[source_num]
+                
+                # Parse page numbers from the citation
+                pages = []
+                for part in page_range.split("-"):
+                    part = part.strip()
+                    if part.isdigit():
+                        pages.append(int(part))
+                
+                inline_citations.append({
+                    "source_number": source_num,
+                    "document_id": info["document_id"],
+                    "filename": info["filename"],
+                    "section_title": info["section_title"],
+                    "pages": pages or [info["page_start"], info["page_end"]],
+                })
+                
+                return f'[{info["filename"]}, Page {page_range}]'
+            
+            return match.group(0)  # Keep original if source number not found
+        
+        # Pattern: [Source N, Page X-Y] or [Source N, Pages X-Y]
+        enriched = re.sub(
+            r'\[Source\s+(\d+),\s*Pages?\s*([\d\-–]+)\]',
+            replace_citation,
+            answer
+        )
+        
+        logger.info(f"Enriched {len(inline_citations)} inline citations")
+        
+        return enriched, inline_citations
     
     async def _build_sources(
         self,

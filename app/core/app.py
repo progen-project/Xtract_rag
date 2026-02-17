@@ -5,7 +5,9 @@ Creates and configures the FastAPI application.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from pathlib import Path
 import logging
 
 from .lifespan import lifespan
@@ -59,6 +61,16 @@ def create_app() -> FastAPI:
     
     # Root and health endpoints
     _register_root_endpoints(app)
+    
+    # Mount static file directories for images
+    from app.config.settings import get_settings
+    settings = get_settings()
+    
+    if settings.images_dir.exists():
+        app.mount("/extracted_images", StaticFiles(directory=str(settings.images_dir)), name="extracted_images")
+    
+    if settings.chat_images_dir.exists():
+        app.mount("/chat_images", StaticFiles(directory=str(settings.chat_images_dir)), name="chat_images")
     
     return app
 

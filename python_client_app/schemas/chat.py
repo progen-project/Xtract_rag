@@ -7,6 +7,15 @@ from typing import Optional, List, Any
 from datetime import datetime
 
 
+class InlineCitation(BaseModel):
+    """A structured inline citation linking answer parts to specific sources."""
+    source_number: int = Field(..., description="Source index (1-based)")
+    document_id: str = Field(..., description="Document ID")
+    filename: str = Field(..., description="Document filename")
+    section_title: str = Field("", description="Section title")
+    pages: List[int] = Field(default_factory=list, description="Page numbers")
+
+
 class ChatMessage(BaseModel):
     """A single message in a chat history."""
     role: str = Field(..., description="Role: 'user' or 'ai'")
@@ -49,4 +58,5 @@ class ChatResponse(BaseModel):
     message_id: str
     answer: str
     sources: dict = Field(default_factory=dict, description="Sources map: document_id -> {filename, pages, ...}")
+    inline_citations: List[InlineCitation] = Field(default_factory=list, description="Structured inline citations")
     image_results: List[ImageSearchResult] = Field(default_factory=list)

@@ -4,7 +4,7 @@ Encapsulates all HTTP communication with the main API.
 """
 import httpx
 import json
-from typing import List, AsyncGenerator, Dict, Any, Optional
+from typing import List, AsyncGenerator, Dict, Any, Optional, Tuple
 from datetime import datetime
 
 from python_client_app.config import ClientConfig
@@ -12,6 +12,10 @@ from python_client_app.schemas.category import CategoryCreate, CategoryUpdate, C
 from python_client_app.schemas.document import DocumentResponse, UploadResponse, DocumentStatus
 from python_client_app.schemas.batch import BatchStatusResponse, TerminateBatchResponse
 from python_client_app.schemas.chat import ChatRequest, ChatResponse, ChatSession
+from python_client_app.schemas.query import (
+    QueryRequest, QueryResponse,
+    ImageSearchRequest, ImageSearchResponse,
+)
 
 
 class RAGClientService:
@@ -55,16 +59,17 @@ class RAGClientService:
             resp.raise_for_status()
             return [DocumentResponse(**item) for item in resp.json()]
 
+    async def get_document(self, document_id: str) -> DocumentResponse:
+        """Get a single document's metadata."""
+        async with await self._get_client() as client:
+            resp = await client.get(f"/documents/{document_id}")
+            resp.raise_for_status()
+            return DocumentResponse(**resp.json())
+
     async def upload_documents(self, category_id: str, files: List[tuple], is_daily: bool = False) -> List[UploadResponse]:
         endpoint = f"/documents/upload/daily/{category_id}" if is_daily else f"/documents/upload/{category_id}"
         
-        # Files structure for httpx: {'files': (filename, content, type)}
-        # The API expects a list of files with key 'files'
-        # The input 'files' here is expected to be list of (filename, content_bytes, content_type)
-        
         async with await self._get_client() as client:
-            # We need to construct multipart/form-data manually or let httpx handle it
-            # httpx format: files=[('files', (filename, content, content_type)), ...]
             resp = await client.post(endpoint, files=files)
             resp.raise_for_status()
             return [UploadResponse(**item) for item in resp.json()]
@@ -82,13 +87,41 @@ class RAGClientService:
             resp.raise_for_status()
             return resp.json()
 
-    async def download_document(self, document_id: str) -> AsyncGenerator[bytes, None]:
-        """Stream file download."""
-        async with await self._get_client() as client:
-            async with client.stream("GET", f"/documents/{document_id}/download", timeout=None) as response:
-                response.raise_for_status()
-                async for chunk in response.aiter_bytes():
-                    yield chunk
+    async def download_document(self, document_id: str) -> Tuple[AsyncGenerator[bytes, None], str, str]:
+        """
+        Stream file download. Returns (byte_generator, filename, content_type).
+        The caller is responsible for using async with on the client.
+        """
+        client = await self._get_client()
+        try:
+            response = await client.send(
+                client.build_request("GET", f"/documents/{document_id}/download"),
+                stream=True
+            )
+            response.raise_for_status()
+            
+            # Extract filename from Content-Disposition header
+            content_disp = response.headers.get("content-disposition", "")
+            filename = "document.pdf"
+            if "filename=" in content_disp:
+                parts = content_disp.split("filename=")
+                if len(parts) > 1:
+                    filename = parts[1].strip().strip('"').strip("'")
+            
+            content_type = response.headers.get("content-type", "application/pdf")
+            
+            async def _stream():
+                try:
+                    async for chunk in response.aiter_bytes():
+                        yield chunk
+                finally:
+                    await response.aclose()
+                    await client.aclose()
+            
+            return _stream(), filename, content_type
+        except Exception:
+            await client.aclose()
+            raise
 
     async def cleanup_daily(self) -> Dict[str, Any]:
         async with await self._get_client() as client:
@@ -139,8 +172,6 @@ class RAGClientService:
             return resp.json()
 
     async def send_message(self, request: ChatRequest, images: List[tuple] = None) -> ChatResponse:
-        # Note: Main API uses Form data for chat if images included.
-        
         data = {
             "message": request.message,
             "top_k": str(request.top_k)
@@ -149,19 +180,26 @@ class RAGClientService:
             data["chat_id"] = request.chat_id
             
         if request.category_ids:
-            # Backend expects a list of strings, or a JSON string representation of it?
-            # Router code: category_ids: Optional[str] = Form(None) -> loads json
             data["category_ids"] = json.dumps(request.category_ids)
 
-        # Prepare files
-        # files argument in httpx: {'images': (filename, content, type), ...} 
-        # But we pass list of tuples directly: [('images', (...)), ...]
         files = images if images else []
 
         async with await self._get_client() as client:
-            # If files are present, data must be sent as form (httpx handles this when files is passed)
-            # If no files, we can still use files=[] or just data.
-            # Using 'data' + 'files' forces multipart/form-data
             resp = await client.post("/chat", data=data, files=files)
             resp.raise_for_status()
             return ChatResponse(**resp.json())
+
+    # --- Query ---
+    async def query(self, request: QueryRequest) -> QueryResponse:
+        """Perform a RAG query."""
+        async with await self._get_client() as client:
+            resp = await client.post("/query", json=request.model_dump())
+            resp.raise_for_status()
+            return QueryResponse(**resp.json())
+
+    async def search_images(self, request: ImageSearchRequest) -> ImageSearchResponse:
+        """Search for images using text or image."""
+        async with await self._get_client() as client:
+            resp = await client.post("/query/image-search", json=request.model_dump(exclude_none=True))
+            resp.raise_for_status()
+            return ImageSearchResponse(**resp.json())

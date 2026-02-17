@@ -8,6 +8,15 @@ from datetime import datetime
 from .query import ImageSearchResult
 
 
+class InlineCitation(BaseModel):
+    """A structured inline citation linking a part of the answer to a specific source."""
+    source_number: int = Field(..., description="Source index (1-based) in the context chunks")
+    document_id: str = Field(..., description="Document ID")
+    filename: str = Field(..., description="Document filename")
+    section_title: str = Field("", description="Section title")
+    pages: List[int] = Field(default_factory=list, description="Page numbers referenced")
+
+
 class ChatMessage(BaseModel):
     """A single message in a chat session."""
     message_id: str
@@ -40,5 +49,6 @@ class ChatResponse(BaseModel):
     chat_id: str
     message_id: str
     answer: str
-    sources: dict = Field(default_factory=dict, description="Sources map: document_id -> list of page numbers")
+    sources: dict = Field(default_factory=dict, description="Sources map: document_id -> {filename, pages, ...}")
+    inline_citations: List[InlineCitation] = Field(default_factory=list, description="Structured inline citations linking answer parts to specific sources")
     image_results: List[ImageSearchResult] = Field(default_factory=list)

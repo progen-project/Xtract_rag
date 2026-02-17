@@ -36,6 +36,7 @@ class QueryResponse(BaseModel):
     answer: str
     retrieved_chunks: List[RetrievedChunk]
     sources: List[str]
+    inline_citations: List[dict] = Field(default_factory=list, description="Structured inline citations: [{source_number, document_id, filename, section_title, pages}]")
 
 
 class MultimodalQueryRequest(BaseModel):

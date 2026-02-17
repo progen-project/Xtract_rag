@@ -1,12 +1,26 @@
 /**
- * API Wrapper for PetroRAG
+ * PetroRAG API Client
+ * Wraps all communication with the Python Client Proxy (port 8001).
  */
 const API_BASE = 'http://localhost:8001/client-api';
+const BACKEND_BASE = 'http://localhost:8000';
 
 class Api {
+    /**
+     * Resolve image paths to full URLs served by the backend.
+     * Paths like "extracted_images/..." or "chat_images/..." become "http://localhost:8000/extracted_images/..."
+     */
+    static resolveImageUrl(path) {
+        if (!path) return '';
+        if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+        // Strip leading ./ or /
+        const cleaned = path.replace(/^\.?\//, '');
+        return `${BACKEND_BASE}/${cleaned}`;
+    }
     // --- Categories ---
     static async listCategories() {
         const res = await fetch(`${API_BASE}/categories`);
+        if (!res.ok) throw new Error('Failed to load categories');
         return res.json();
     }
 
@@ -43,6 +57,13 @@ class Api {
         let url = `${API_BASE}/documents`;
         if (categoryId) url += `?category_id=${categoryId}`;
         const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to load documents');
+        return res.json();
+    }
+
+    static async getDocument(documentId) {
+        const res = await fetch(`${API_BASE}/documents/${documentId}`);
+        if (!res.ok) throw new Error('Failed to get document');
         return res.json();
     }
 
@@ -51,15 +72,14 @@ class Api {
         for (let i = 0; i < files.length; i++) {
             formData.append('files', files[i]);
         }
-        
-        const endpoint = isDaily ? 'documents/upload/daily' : 'documents/upload';
-        const res = await fetch(`${API_BASE}/${endpoint}/${categoryId}`, {
+
+        const res = await fetch(`${API_BASE}/documents/upload/${categoryId}`, {
             method: 'POST',
             body: formData
         });
 
         if (!res.ok) throw new Error('Upload failed');
-        return res.json(); // Returns array of uploaded docs with batch_id
+        return res.json();
     }
 
     static async deleteDocument(documentId) {
@@ -76,6 +96,10 @@ class Api {
         });
         if (!res.ok) throw new Error('Failed to burn document');
         return res.json();
+    }
+
+    static getDownloadUrl(documentId) {
+        return `${API_BASE}/documents/${documentId}/download`;
     }
 
     static async cleanupDaily() {
@@ -107,7 +131,7 @@ class Api {
 
     static streamBatchProgress(batchId, onMessage, onError) {
         const evtSource = new EventSource(`${API_BASE}/batches/${batchId}/progress`);
-        
+
         evtSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
             onMessage(data);
@@ -119,12 +143,19 @@ class Api {
             if (onError) onError(err);
         };
 
-        return evtSource; // Return to allow closing
+        return evtSource;
     }
 
     // --- Chat ---
     static async listChats() {
         const res = await fetch(`${API_BASE}/chat`);
+        if (!res.ok) throw new Error('Failed to load chats');
+        return res.json();
+    }
+
+    static async getChat(chatId) {
+        const res = await fetch(`${API_BASE}/chat/${chatId}`);
+        if (!res.ok) throw new Error('Failed to load chat');
         return res.json();
     }
 
@@ -136,21 +167,119 @@ class Api {
         return res.json();
     }
 
-    static async sendMessage(message, chatId, categoryIds = []) {
+    static async sendMessage(message, chatId, categoryIds = [], images = []) {
         const formData = new FormData();
         formData.append('message', message);
         if (chatId) formData.append('chat_id', chatId);
-        if (categoryIds.length > 0) {
-            // API expects stringified JSON or comma-separated
-             formData.append('category_ids', JSON.stringify(categoryIds));
+        if (categoryIds && categoryIds.length > 0) {
+            formData.append('category_ids', JSON.stringify(categoryIds));
         }
-        
+
+        // Attach image files
+        if (images && images.length > 0) {
+            images.forEach(img => formData.append('images', img));
+        }
+
         const res = await fetch(`${API_BASE}/chat`, {
             method: 'POST',
             body: formData
         });
 
         if (!res.ok) throw new Error('Message sending failed');
+        return res.json();
+    }
+
+    /**
+     * Stream a chat message response word-by-word via SSE.
+     * @param {string} message
+     * @param {string|null} chatId
+     * @param {string[]} categoryIds
+     * @param {File[]} images
+     * @param {function} onToken  - called with each text token
+     * @param {function} onDone   - called with final metadata object
+     * @param {function} onError  - called on error
+     */
+    static async sendMessageStream(message, chatId, categoryIds = [], images = [], onToken, onDone, onError) {
+        const formData = new FormData();
+        formData.append('message', message);
+        if (chatId) formData.append('chat_id', chatId);
+        if (categoryIds && categoryIds.length > 0) {
+            formData.append('category_ids', JSON.stringify(categoryIds));
+        }
+        if (images && images.length > 0) {
+            images.forEach(img => formData.append('images', img));
+        }
+
+        try {
+            const res = await fetch(`${BACKEND_BASE}/api/chat/stream`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) throw new Error('Stream request failed');
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // Parse SSE lines
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.done) {
+                                if (onDone) onDone(data);
+                            } else if (data.token) {
+                                if (onToken) onToken(data.token);
+                            } else if (data.error) {
+                                if (onError) onError(new Error(data.error));
+                            }
+                        } catch (e) {
+                            // skip unparseable lines
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            if (onError) onError(e);
+        }
+    }
+
+    // --- Query ---
+    static async query(queryText, categoryIds = null, topK = 5) {
+        const body = { query: queryText, top_k: topK };
+        if (categoryIds) body.category_ids = categoryIds;
+
+        const res = await fetch(`${API_BASE}/query`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error('Query failed');
+        return res.json();
+    }
+
+    static async searchImages(queryText = null, imageBase64 = null, categoryIds = null) {
+        const body = {};
+        if (queryText) body.query_text = queryText;
+        if (imageBase64) body.query_image_base64 = imageBase64;
+        if (categoryIds) body.category_ids = categoryIds;
+
+        const res = await fetch(`${API_BASE}/query/image-search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error('Image search failed');
         return res.json();
     }
 }

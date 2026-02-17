@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Body, Form
+from fastapi.responses import StreamingResponse
 from typing import List, Optional
 import json
 
@@ -8,6 +9,10 @@ from python_client_app.schemas.category import CategoryCreate, CategoryUpdate, C
 from python_client_app.schemas.document import DocumentResponse, UploadResponse, DocumentStatus
 from python_client_app.schemas.batch import BatchStatusResponse, TerminateBatchResponse
 from python_client_app.schemas.chat import ChatRequest, ChatResponse, ChatSession
+from python_client_app.schemas.query import (
+    QueryRequest, QueryResponse,
+    ImageSearchRequest, ImageSearchResponse,
+)
 
 router = APIRouter()
 rag_service = RAGClientService()
@@ -33,6 +38,11 @@ async def delete_category(category_id: str):
 @router.get("/documents", response_model=List[DocumentResponse], tags=["Documents"])
 async def list_documents(category_id: Optional[str] = None):
     return await rag_service.list_documents(category_id)
+
+@router.get("/documents/{document_id}", response_model=DocumentResponse, tags=["Documents"])
+async def get_document(document_id: str):
+    """Get a single document's metadata."""
+    return await rag_service.get_document(document_id)
 
 @router.post("/documents/upload/{category_id}", response_model=List[UploadResponse], tags=["Documents"])
 async def upload_documents(
@@ -62,11 +72,15 @@ async def burn_document(document_id: str):
 
 @router.get("/documents/{document_id}/download", tags=["Documents"])
 async def download_document(document_id: str):
-    """Proxy download."""
-    from fastapi.responses import StreamingResponse
+    """Proxy download with proper filename and content-type headers."""
+    stream, filename, content_type = await rag_service.download_document(document_id)
+    
     return StreamingResponse(
-        rag_service.download_document(document_id),
-        media_type="application/pdf"
+        stream,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
     )
 
 @router.delete("/documents/cleanup/daily", tags=["Documents"])
@@ -88,8 +102,6 @@ async def terminate_batch(batch_id: str):
 @router.get("/batches/{batch_id}/progress", tags=["Batches"])
 async def stream_batch_progress(batch_id: str):
     """Proxy SSE stream."""
-    from fastapi.responses import StreamingResponse
-    
     async def generator():
         async for data in rag_service.stream_batch_progress(batch_id):
             yield f"data: {json.dumps(data)}\n\n"
@@ -121,8 +133,6 @@ async def send_message(
     Proxy chat request. 
     Accepts Form data to match main API and allow efficient forwarding.
     """
-    # Create ChatRequest object to pass to service
-    # We need to parse category_ids from string if JSON
     parsed_category_ids = None
     if category_ids:
         try:
@@ -143,6 +153,18 @@ async def send_message(
     image_files = []
     for img in images:
         content = await img.read()
-        image_files.append(('images', (img.filename, content, img.content_type)))
+        if img.filename:  # Skip empty file inputs
+            image_files.append(('images', (img.filename, content, img.content_type)))
         
     return await rag_service.send_message(request, image_files)
+
+# --- Query ---
+@router.post("/query", response_model=QueryResponse, tags=["Query"])
+async def query(request: QueryRequest):
+    """Proxy RAG query to main API."""
+    return await rag_service.query(request)
+
+@router.post("/query/image-search", response_model=ImageSearchResponse, tags=["Query"])
+async def image_search(request: ImageSearchRequest):
+    """Proxy image search to main API."""
+    return await rag_service.search_images(request)

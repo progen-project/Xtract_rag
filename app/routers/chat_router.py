@@ -58,6 +58,58 @@ async def chat(
     )
 
 
+@router.post("/stream")
+async def chat_stream(
+    message: str = Form(...),
+    chat_id: Optional[str] = Form(None),
+    category_ids: Optional[str] = Form(None),
+    top_k: int = Form(5),
+    images: List[UploadFile] = File(default=[]),
+    controller: ChatController = Depends(get_chat_controller)
+):
+    """
+    Streaming chat endpoint.
+    Returns Server-Sent Events with word-by-word response tokens.
+    
+    Events:
+    - data: {"token": "word"} — each content token
+    - data: {"done": true, "chat_id": "...", "answer": "...", "sources": {...}, ...} — final metadata
+    """
+    from fastapi.responses import StreamingResponse
+
+    # Parse category_ids
+    parsed_category_ids = None
+    if category_ids:
+        try:
+            parsed_category_ids = json.loads(category_ids)
+            if isinstance(parsed_category_ids, str):
+                parsed_category_ids = [parsed_category_ids]
+        except json.JSONDecodeError:
+            parsed_category_ids = [cid.strip() for cid in category_ids.split(",") if cid.strip()]
+
+    # Save images
+    image_paths = []
+    if images and images[0].filename:
+        temp_chat_id = chat_id or f"temp_{__import__('uuid').uuid4().hex[:12]}"
+        image_paths = await controller.save_uploaded_images(images, temp_chat_id)
+
+    return StreamingResponse(
+        controller.send_message_stream(
+            message=message,
+            chat_id=chat_id,
+            category_ids=parsed_category_ids,
+            image_paths=image_paths,
+            top_k=top_k
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
 @router.get("", response_model=List[ChatSession])
 async def list_chats(
     limit: int = 50,

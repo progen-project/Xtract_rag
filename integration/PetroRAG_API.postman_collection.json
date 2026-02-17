@@ -1,0 +1,878 @@
+{
+	"info": {
+		"_postman_id": "petrorag-api-collection-v1",
+		"name": "PetroRAG API",
+		"description": "Complete API collection for PetroRAG — a multimodal RAG pipeline for document management, chat, and query.\n\n## Architecture\n- **Main API** (port 8000): Core backend with all business logic\n- **Client Proxy** (port 8001): Strongly-typed FastAPI proxy layer\n\nThis collection targets the **Main API** (`{{base_url}}`). For client proxy requests, use `{{client_url}}`.\n\n## Quick Start\n1. Import this collection and the environment file\n2. Start the backend: `uvicorn app.main:app --port 8000`\n3. Run requests in order: Create Category → Upload → Chat/Query",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [],
+	"item": [
+		{
+			"name": "Categories",
+			"description": "CRUD operations for organizing documents into categories.",
+			"item": [
+				{
+					"name": "Create Category",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const json = pm.response.json();",
+									"    pm.environment.set('category_id', json.category_id);",
+									"    pm.test('Category created', () => {",
+									"        pm.expect(json).to.have.property('category_id');",
+									"        pm.expect(json).to.have.property('name');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Finance Reports 2024\",\n    \"description\": \"Annual and quarterly financial reports\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/categories",
+							"host": ["{{base_url}}"],
+							"path": ["categories"]
+						},
+						"description": "Create a new category to organize documents.\n\n**Request Body:**\n- `name` (string, required): Category name\n- `description` (string, optional): Description\n\n**Response:** CategoryResponse object with `category_id`, `name`, `description`, `document_count`, `created_at`"
+					}
+				},
+				{
+					"name": "List Categories",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Returns array', () => {",
+									"    pm.expect(pm.response.json()).to.be.an('array');",
+									"});",
+									"",
+									"// Save first category ID if available",
+									"const cats = pm.response.json();",
+									"if (cats.length > 0) {",
+									"    pm.environment.set('category_id', cats[0].category_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/categories",
+							"host": ["{{base_url}}"],
+							"path": ["categories"]
+						},
+						"description": "List all categories.\n\n**Response:** Array of CategoryResponse objects."
+					},
+					"response": [
+						{
+							"name": "Success Example",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/categories",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"categories"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "[\n    {\n        \"category_id\": \"cat_123\",\n        \"name\": \"Finance\",\n        \"description\": \"Financial reports\",\n        \"document_count\": 10,\n        \"created_at\": \"2024-01-01T00:00:00\"\n    },\n    {\n        \"category_id\": \"cat_456\",\n        \"name\": \"Engineering\",\n        \"description\": \"Technical specs\",\n        \"document_count\": 5,\n        \"created_at\": \"2024-01-02T00:00:00\"\n    }\n]"
+						}
+					]
+				},
+				{
+					"name": "Get Category",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/categories/{{category_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["categories", "{{category_id}}"]
+						},
+						"description": "Get a specific category by ID.\n\n**Path Params:**\n- `category_id`: The category's unique ID"
+					}
+				},
+				{
+					"name": "Update Category",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Finance Reports 2025\",\n    \"description\": \"Updated description\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/categories/{{category_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["categories", "{{category_id}}"]
+						},
+						"description": "Update a category's name and/or description.\n\n**Request Body (all optional):**\n- `name` (string): New name\n- `description` (string): New description"
+					}
+				},
+				{
+					"name": "Delete Category",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/categories/{{category_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["categories", "{{category_id}}"]
+						},
+						"description": "Delete a category. Documents remain but lose their category grouping."
+					}
+				}
+			]
+		},
+		{
+			"name": "Documents",
+			"description": "Upload, manage, and download PDF documents.",
+			"item": [
+				{
+					"name": "Upload Documents (Permanent)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const json = pm.response.json();",
+									"    if (json.length > 0) {",
+									"        pm.environment.set('document_id', json[0].document_id);",
+									"        pm.environment.set('batch_id', json[0].batch_id);",
+									"    }",
+									"    pm.test('Upload returns documents', () => {",
+									"        pm.expect(json).to.be.an('array');",
+									"        pm.expect(json.length).to.be.greaterThan(0);",
+									"        pm.expect(json[0]).to.have.property('document_id');",
+									"        pm.expect(json[0]).to.have.property('batch_id');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "files",
+									"type": "file",
+									"description": "PDF file(s) to upload. Select one or more PDF files.",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/documents/upload/{{category_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["documents", "upload", "{{category_id}}"]
+						},
+						"description": "Upload PDF documents to a category for permanent storage and processing.\n\n**Path Params:**\n- `category_id`: Target category ID\n\n**Form Data:**\n- `files`: One or more PDF files (max 50)\n\n**Response:** Array of `DocumentUploadResponse` with `document_id`, `batch_id`, `filename`, `status`.\n\n**Important:** After upload, use the `batch_id` to track processing progress via the Batches endpoints."
+					},
+					"response": [
+						{
+							"name": "Success Example",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "files",
+											"type": "file",
+											"src": []
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/documents/upload/{{category_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"documents",
+										"upload",
+										"{{category_id}}"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "[\n    {\n        \"document_id\": \"doc_123\",\n        \"category_id\": \"cat_123\",\n        \"filename\": \"report.pdf\",\n        \"message\": \"Upload successful\",\n        \"status\": \"pending\",\n        \"batch_id\": \"batch_abc\"\n    }\n]"
+						}
+					]
+				},
+				{
+					"name": "Upload Documents (Daily / Temporary)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const json = pm.response.json();",
+									"    if (json.length > 0) {",
+									"        pm.environment.set('document_id', json[0].document_id);",
+									"        pm.environment.set('batch_id', json[0].batch_id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "files",
+									"type": "file",
+									"description": "PDF file(s) to upload temporarily.",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/documents/upload/daily/{{category_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["documents", "upload", "daily", "{{category_id}}"]
+						},
+						"description": "Upload temporary documents that auto-delete after 24 hours.\n\nSame interface as permanent upload, but documents are marked as `is_daily=true`."
+					}
+				},
+				{
+					"name": "List Documents",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Returns array', () => {",
+									"    pm.expect(pm.response.json()).to.be.an('array');",
+									"});",
+									"const docs = pm.response.json();",
+									"if (docs.length > 0) {",
+									"    pm.environment.set('document_id', docs[0].document_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/documents?category_id={{category_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["documents"],
+							"query": [
+								{
+									"key": "category_id",
+									"value": "{{category_id}}",
+									"description": "Optional. Filter by category."
+								}
+							]
+						},
+						"description": "List all documents, optionally filtered by category.\n\n**Query Params:**\n- `category_id` (optional): Filter documents by category\n\n**Response:** Array of `DocumentMetadata` objects."
+					}
+				},
+				{
+					"name": "Get Document",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/documents/{{document_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["documents", "{{document_id}}"]
+						},
+						"description": "Get metadata for a single document.\n\n**Response:** `DocumentMetadata` with `document_id`, `category_id`, `filename`, `status`, `upload_date`, `batch_id`, `is_daily`, `error_message`."
+					}
+				},
+				{
+					"name": "Download Document",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/documents/{{document_id}}/download",
+							"host": ["{{base_url}}"],
+							"path": ["documents", "{{document_id}}", "download"]
+						},
+						"description": "Download the original PDF file.\n\n**Response:** Binary PDF file with `Content-Disposition: attachment` header."
+					}
+				},
+				{
+					"name": "Delete Document",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/documents/{{document_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["documents", "{{document_id}}"]
+						},
+						"description": "Soft delete a document (metadata remains)."
+					}
+				},
+				{
+					"name": "Burn Document (Full Purge)",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/documents/{{document_id}}/burn",
+							"host": ["{{base_url}}"],
+							"path": ["documents", "{{document_id}}", "burn"]
+						},
+						"description": "**Permanently** remove a document and ALL related data:\n- MongoDB metadata\n- Qdrant vectors (text + image embeddings)\n- Physical file on disk\n\n⚠️ This action is irreversible."
+					}
+				},
+				{
+					"name": "Cleanup Daily Documents",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/documents/cleanup/daily",
+							"host": ["{{base_url}}"],
+							"path": ["documents", "cleanup", "daily"]
+						},
+						"description": "Remove all daily (temporary) documents that have expired (older than 24 hours).\n\nCleans MongoDB, Qdrant, and disk."
+					}
+				}
+			]
+		},
+		{
+			"name": "Batches",
+			"description": "Track and manage document processing batches. Every upload creates a batch.",
+			"item": [
+				{
+					"name": "Get Batch Status (Snapshot)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/batches/{{batch_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["batches", "{{batch_id}}"]
+						},
+						"description": "Get a one-time snapshot of a batch's current status.\n\n**Response:**\n```json\n{\n  \"batch_id\": \"abc123\",\n  \"files\": {\n    \"report.pdf\": {\n      \"status\": \"chunking\",\n      \"detail\": \"Processing page 5/20\"\n    }\n  },\n  \"timestamp\": \"2024-01-01T00:00:00\"\n}\n```"
+					}
+				},
+				{
+					"name": "Stream Batch Progress (SSE)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/batches/{{batch_id}}/progress",
+							"host": ["{{base_url}}"],
+							"path": ["batches", "{{batch_id}}", "progress"]
+						},
+						"description": "**Server-Sent Events (SSE)** stream for real-time processing progress.\n\n**Note:** This is a streaming endpoint. In Postman, you'll see the response as it arrives. In code, use `EventSource`:\n\n```javascript\nconst evtSource = new EventSource('/api/batches/{batch_id}/progress');\nevtSource.onmessage = (event) => {\n    const data = JSON.parse(event.data);\n    console.log(data.filename, data.status, data.detail);\n};\n```\n\n**Event Format:**\n```\ndata: {\"filename\": \"report.pdf\", \"status\": \"embedding\", \"detail\": \"Generating vectors\"}\n```"
+					}
+				},
+				{
+					"name": "Terminate Batch",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{base_url}}/batches/{{batch_id}}/terminate",
+							"host": ["{{base_url}}"],
+							"path": ["batches", "{{batch_id}}", "terminate"]
+						},
+						"description": "Terminate a batch upload in progress.\n\n- **Completed** documents are kept\n- **Incomplete** documents are deleted\n\n**Response:**\n```json\n{\n  \"batch_id\": \"abc123\",\n  \"total_documents\": 5,\n  \"kept_completed\": 3,\n  \"deleted_incomplete\": 2\n}\n```"
+					}
+				}
+			]
+		},
+		{
+			"name": "Chat",
+			"description": "Conversational AI interface with document-grounded responses.",
+			"item": [
+				{
+					"name": "Send Message",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const json = pm.response.json();",
+									"    pm.environment.set('chat_id', json.chat_id);",
+									"    pm.test('Chat response has answer', () => {",
+									"        pm.expect(json).to.have.property('chat_id');",
+									"        pm.expect(json).to.have.property('answer');",
+									"        pm.expect(json).to.have.property('sources');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "message",
+									"value": "What are the key findings in the uploaded reports?",
+									"type": "text",
+									"description": "Required. The user's question."
+								},
+								{
+									"key": "chat_id",
+									"value": "",
+									"type": "text",
+									"description": "Optional. Existing chat session ID for continuity.",
+									"disabled": true
+								},
+								{
+									"key": "category_ids",
+									"value": "[\"{{category_id}}\"]",
+									"type": "text",
+									"description": "Optional. JSON array of category IDs to search within."
+								},
+								{
+									"key": "top_k",
+									"value": "5",
+									"type": "text",
+									"description": "Number of context chunks to retrieve (1-20, default 5)."
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"description": "Optional. Image files for multimodal queries (max 10).",
+									"src": [],
+									"disabled": true
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/chat",
+							"host": ["{{base_url}}"],
+							"path": ["chat"]
+						},
+						"description": "Send a message to the AI chat. Uses `multipart/form-data` to support optional image uploads.\n\n**Form Fields:**\n- `message` (string, required): User's question\n- `chat_id` (string, optional): Continue existing conversation\n- `category_ids` (JSON string, optional): Restrict search to specific categories\n- `top_k` (int, optional): Number of context chunks (default: 5)\n- `images` (file[], optional): Image attachments for visual queries\n\n**Response:**\n```json\n{\n  \"chat_id\": \"abc123\",\n  \"message_id\": \"msg_456\",\n  \"answer\": \"Based on the reports [report.pdf, Page 3-4]...\",\n  \"sources\": {\n    \"doc_id\": { \"filename\": \"report.pdf\", \"pages\": [1, 3, 5] }\n  },\n  \"inline_citations\": [\n    { \"source_number\": 1, \"document_id\": \"doc_abc\", \"filename\": \"report.pdf\", \"pages\": [3, 4] }\n  ],\n  \"image_results\": []\n}\n```\n\n**Frontend Integration Notes:**\n- First message creates a new chat session → save the returned `chat_id`\n- Subsequent messages should include `chat_id` for conversation continuity\n- `category_ids` should be a JSON-stringified array: `'[\"id1\", \"id2\"]'`"
+					},
+					"response": [
+						{
+							"name": "Success Example",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "message",
+											"value": "What are the key findings?",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/chat",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"chat"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"chat_id\": \"98765432-abcd-efgh-ijkl-1234567890ab\",\n    \"message_id\": \"msg_12345678\",\n    \"answer\": \"Based on the analysis of field reports [Source 1, Page 5], production increased by 15% in Q3. The new drilling methodology [Source 2, Page 12] contributed significantly to this growth.\",\n    \"sources\": {\n        \"doc_123\": {\n            \"filename\": \"Quarterly_Report_Q3_2024.pdf\",\n            \"pages\": [5, 6]\n        },\n        \"doc_456\": {\n             \"filename\": \"Drilling_Methodology_v2.pdf\",\n             \"pages\": [12]\n        }\n    },\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"doc_123\",\n            \"filename\": \"Quarterly_Report_Q3_2024.pdf\",\n            \"section_title\": \"Production Overview\",\n            \"pages\": [5]\n        },\n        {\n            \"source_number\": 2,\n            \"document_id\": \"doc_456\",\n            \"filename\": \"Drilling_Methodology_v2.pdf\",\n            \"section_title\": \"New Techniques\",\n            \"pages\": [12]\n        }\n    ],\n    \"image_results\": [\n        {\n            \"image_id\": \"img_789\",\n            \"document_id\": \"doc_123\",\n            \"page_number\": 6,\n            \"section_title\": \"Production Chart\",\n            \"caption\": \"Figure 3.1: Monthly Output\",\n            \"analysis\": \"The chart shows a steady upward trend in monthly output, peaking in September.\",\n            \"image_path\": \"/static/images/doc_123/img_789.png\",\n            \"score\": 0.85\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "Send Message (Streaming)",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "message",
+									"value": "Summarize the uploaded documents",
+									"type": "text"
+								},
+								{
+									"key": "category_ids",
+									"value": "[\"{{category_id}}\"]",
+									"type": "text"
+								},
+								{
+									"key": "top_k",
+									"value": "5",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/chat/stream",
+							"host": ["{{base_url}}"],
+							"path": ["chat", "stream"]
+						},
+						"description": "**Server-Sent Events (SSE)** streaming version of the chat endpoint.\n\nReturns word-by-word tokens as they are generated, then a final metadata event.\n\n**Same form fields as Send Message.**\n\n**Event Format:**\n```\ndata: {\"token\": \"Based\"}\ndata: {\"token\": \" on\"}\ndata: {\"token\": \" the\"}\n...\ndata: {\"done\": true, \"chat_id\": \"abc123\", \"answer\": \"...\", \"sources\": {...}, \"inline_citations\": [...]}\n```\n\n**Frontend Usage:**\n```javascript\nconst reader = response.body.getReader();\n// Read and parse each SSE event for real-time display\n```"
+					},
+					"response": [
+						{
+							"name": "Streaming Example",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "message",
+											"value": "Summarize",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/chat/stream",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"chat",
+										"stream"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "text/event-stream"
+								}
+							],
+							"cookie": [],
+							"body": "data: {\"token\": \"Based\"}\n\ndata: {\"token\": \" on\"}\n\ndata: {\"token\": \" the\"}\n\ndata: {\"token\": \" reports\"}\n\ndata: {\"done\": true, \"chat_id\": \"98765432-abcd\", \"message_id\": \"msg_123\", \"answer\": \"Based on the reports...\", \"sources\": {\"doc_1\": {\"filename\": \"report.pdf\"}}, \"inline_citations\": [], \"image_results\": []}\n\n"
+						}
+					]
+				},
+				{
+					"name": "List Chat Sessions",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Returns array', () => {",
+									"    pm.expect(pm.response.json()).to.be.an('array');",
+									"});",
+									"const chats = pm.response.json();",
+									"if (chats.length > 0) {",
+									"    pm.environment.set('chat_id', chats[0].chat_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/chat?limit=50",
+							"host": ["{{base_url}}"],
+							"path": ["chat"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Maximum number of sessions to return (default 50)"
+								}
+							]
+						},
+						"description": "List all chat sessions.\n\n**Response:** Array of `ChatSession` objects with `chat_id`, `title`, `created_at`, `messages`."
+					}
+				},
+				{
+					"name": "Get Chat Session",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/chat/{{chat_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["chat", "{{chat_id}}"]
+						},
+						"description": "Get full chat session with all messages.\n\n**Response:** `ChatSession` with `messages[]` array containing `role`, `content`, `timestamp`, `sources`, `image_paths`."
+					}
+				},
+				{
+					"name": "Delete Chat Session",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/chat/{{chat_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["chat", "{{chat_id}}"]
+						},
+						"description": "Delete a chat session and all its messages."
+					}
+				}
+			]
+		},
+		{
+			"name": "Query",
+			"description": "Direct RAG query and image search (without chat session management).",
+			"item": [
+				{
+					"name": "RAG Query",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"category_ids\": [\"{{category_id}}\"],\n    \"top_k\": 5,\n    \"include_images\": true,\n    \"include_tables\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/query",
+							"host": ["{{base_url}}"],
+							"path": ["query"]
+						},
+						"description": "Perform a one-shot RAG query (no chat history).\n\n**Request Body:**\n- `query` (string, required): Question text\n- `category_ids` (string[], optional): Filter by categories\n- `document_ids` (string[], optional): Filter by specific documents\n- `top_k` (int, 1-20, default 5): Number of chunks\n- `include_images` (bool, default true): Include related images\n- `include_tables` (bool, default true): Include related tables\n\n**Response:**\n```json\n{\n  \"query\": \"...\",\n  \"answer\": \"...\",\n  \"retrieved_chunks\": [...],\n  \"sources\": [\"doc1.pdf\", \"doc2.pdf\"],\n  \"inline_citations\": [\n    { \"source_number\": 1, \"document_id\": \"doc_abc\", \"filename\": \"report.pdf\", \"pages\": [3, 4] }\n  ]\n}\n```"
+					},
+					"response": [
+						{
+							"name": "Success Example",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ],\n    \"top_k\": 5,\n    \"include_images\": true,\n    \"include_tables\": true\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/query",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"query"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"answer\": \"Detailed production statistics indicate a 15% increase...\",\n    \"retrieved_chunks\": [\n        {\n            \"chunk_id\": \"doc_123_chunk_4\",\n            \"content\": \"...text content...\",\n            \"score\": 0.95,\n            \"section_title\": \"Q3 Stats\",\n            \"page_start\": 5,\n            \"page_end\": 5,\n            \"images\": [],\n            \"tables\": []\n        }\n    ],\n    \"sources\": [\n        \"doc_123\"\n    ],\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"doc_123\",\n            \"filename\": \"report.pdf\",\n            \"section_title\": \"Q3 Stats\",\n            \"pages\": [\n                5\n            ]\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "Image Search",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"category_ids\": [\"{{category_id}}\"],\n    \"top_k\": 5\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/query/image-search",
+							"host": ["{{base_url}}"],
+							"path": ["query", "image-search"]
+						},
+						"description": "Search for images across documents using text or image input.\n\n**Request Body:**\n- `query_text` (string, optional): Text description of desired image\n- `query_image_base64` (string, optional): Base64-encoded image to search by similarity\n- `category_ids` (string[], optional): Filter by categories\n- `document_ids` (string[], optional): Filter by documents\n- `top_k` (int, default 5): Number of results\n\n**Response:**\n```json\n{\n  \"query_text\": \"...\",\n  \"has_query_image\": false,\n  \"results\": [\n    {\n      \"image_id\": \"...\",\n      \"document_id\": \"...\",\n      \"page_number\": 3,\n      \"section_title\": \"Equipment Layout\",\n      \"caption\": \"Figure 1: Production Flow\",\n      \"image_path\": \"/path/to/image.png\",\n      \"score\": 0.92\n    }\n  ],\n  \"count\": 1\n}\n```"
+					},
+					"response": [
+						{
+							"name": "Success Example",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ],\n    \"top_k\": 5\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/query/image-search",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"query",
+										"image-search"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"has_query_image\": false,\n    \"results\": [\n        {\n            \"image_id\": \"img_789\",\n            \"document_id\": \"doc_123\",\n            \"page_number\": 3,\n            \"section_title\": \"Equipment Layout\",\n            \"caption\": \"Figure 1: Production Flow\",\n            \"analysis\": \"This flowchart demonstrates the process...\",\n            \"image_path\": \"/static/images/doc_123/img_789.png\",\n            \"score\": 0.92\n        }\n    ],\n    \"count\": 1\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Client Proxy",
+			"description": "Same endpoints via the Python Client Proxy (port 8001). Uses `{{client_url}}` base URL.",
+			"item": [
+				{
+					"name": "List Categories (via Proxy)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{client_url}}/categories",
+							"host": ["{{client_url}}"],
+							"path": ["categories"]
+						},
+						"description": "Same as Main API but routed through the Python Client Proxy on port 8001."
+					}
+				},
+				{
+					"name": "Send Chat Message (via Proxy)",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "message",
+									"value": "Summarize the key data points",
+									"type": "text"
+								},
+								{
+									"key": "category_ids",
+									"value": "[\"{{category_id}}\"]",
+									"type": "text"
+								},
+								{
+									"key": "top_k",
+									"value": "5",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{client_url}}/chat",
+							"host": ["{{client_url}}"],
+							"path": ["chat"]
+						},
+						"description": "Send chat message via the Client Proxy. The proxy validates DTOs and forwards to the main API."
+					}
+				},
+				{
+					"name": "RAG Query (via Proxy)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"query\": \"What are the key metrics?\",\n    \"top_k\": 5\n}"
+						},
+						"url": {
+							"raw": "{{client_url}}/query",
+							"host": ["{{client_url}}"],
+							"path": ["query"]
+						},
+						"description": "RAG query via the Client Proxy."
+					}
+				}
+			]
+		}
+	]
+}

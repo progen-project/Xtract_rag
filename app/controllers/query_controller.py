@@ -3,6 +3,7 @@ Query controller with business logic.
 """
 from typing import List, Optional
 import logging
+import re
 
 from app.schemas import (
     QueryRequest,
@@ -77,12 +78,84 @@ class QueryController:
             for chunk in retrieved_chunks
         ))
         
+        # Build sources map for citation enrichment
+        sources_map = {}
+        for src_id in sources:
+            try:
+                doc = await self.document_repo.get_by_id(src_id)
+                sources_map[src_id] = {
+                    "filename": doc.filename if doc else "Unknown",
+                    "document_id": src_id
+                }
+            except Exception:
+                sources_map[src_id] = {"filename": "Unknown", "document_id": src_id}
+        
+        # Enrich inline citations
+        answer, inline_citations = self._enrich_inline_citations(
+            answer, retrieved_chunks, sources_map
+        )
+        
         return QueryResponse(
             query=request.query,
             answer=answer,
             retrieved_chunks=retrieved_chunks,
-            sources=sources
+            sources=sources,
+            inline_citations=inline_citations
         )
+    
+    def _enrich_inline_citations(
+        self,
+        answer: str,
+        context_chunks,
+        sources_map: dict
+    ) -> tuple:
+        """
+        Post-process LLM answer to replace [Source N, Page X-Y] with
+        [filename.pdf, Page X-Y] and build structured inline_citations list.
+        """
+        inline_citations = []
+        
+        chunk_doc_map = {}
+        for i, chunk in enumerate(context_chunks, 1):
+            doc_id = chunk.chunk_id.split("_chunk_")[0] if chunk.chunk_id else ""
+            source_info = sources_map.get(doc_id, {})
+            filename = source_info.get("filename", "Unknown") if isinstance(source_info, dict) else "Unknown"
+            chunk_doc_map[i] = {
+                "document_id": doc_id,
+                "filename": filename,
+                "section_title": chunk.section_title,
+                "page_start": chunk.page_start,
+                "page_end": chunk.page_end,
+            }
+        
+        def replace_citation(match):
+            source_num = int(match.group(1))
+            page_range = match.group(2)
+            
+            if source_num in chunk_doc_map:
+                info = chunk_doc_map[source_num]
+                pages = []
+                for part in page_range.split("-"):
+                    part = part.strip()
+                    if part.isdigit():
+                        pages.append(int(part))
+                
+                inline_citations.append({
+                    "source_number": source_num,
+                    "document_id": info["document_id"],
+                    "filename": info["filename"],
+                    "section_title": info["section_title"],
+                    "pages": pages or [info["page_start"], info["page_end"]],
+                })
+                return f'[{info["filename"]}, Page {page_range}]'
+            return match.group(0)
+        
+        enriched = re.sub(
+            r'\[Source\s+(\d+),\s*Pages?\s*([\d\-–]+)\]',
+            replace_citation,
+            answer
+        )
+        return enriched, inline_citations
     
     async def search_images(self, request: ImageSearchRequest) -> ImageSearchResponse:
         """Search for images using text or image query."""
