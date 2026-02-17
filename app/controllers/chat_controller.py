@@ -235,7 +235,7 @@ class ChatController:
             message_id=assistant_message_id,
             role="assistant",
             content=answer,
-            image_paths=[],
+            image_paths=[img.image_path for img in images_from_search],
             sources=sources,
             timestamp=datetime.utcnow()
         )
@@ -408,7 +408,7 @@ class ChatController:
             message_id=assistant_message_id,
             role="assistant",
             content=answer,
-            image_paths=[],
+            image_paths=[img.image_path for img in images_from_search],
             sources=sources,
             timestamp=datetime.utcnow()
         )
