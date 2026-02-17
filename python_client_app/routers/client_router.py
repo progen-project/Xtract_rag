@@ -110,15 +110,44 @@ async def stream_batch_progress(batch_id: str):
 
         asyncio.create_task(feed())
 
+        TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
+        
+        # تتبع حالة كل ملف
+        files_status = {}
+        total_files = 0
+
         while True:
             try:
-                # انتظر data أو ابعت heartbeat كل 15 ثانية
                 kind, data = await asyncio.wait_for(queue.get(), timeout=15)
+                
                 if kind == "done":
                     break
+                    
                 yield f"data: {json.dumps(data)}\n\n"
+
+                # استخرج عدد الملفات من initial_state
+                if data.get("type") == "initial_state":
+                    total_files = len(data.get("files", {}))
+                    # initialize كل الملفات
+                    for filename in data.get("files", {}):
+                        files_status[filename] = data["files"][filename].get("status")
+
+                # اپديت حالة الملف الحالي
+                filename = data.get("filename")
+                status = data.get("status")
+                if filename and status:
+                    files_status[filename] = status
+
+                # ✅ وقف بس لما كل الملفات خلصت
+                if total_files > 0 and len(files_status) == total_files:
+                    all_done = all(
+                        s in TERMINAL_STATUSES 
+                        for s in files_status.values()
+                    )
+                    if all_done:
+                        break
+
             except asyncio.TimeoutError:
-                # ابعت heartbeat يخلي الـ connection حي
                 yield f": heartbeat\n\n"
 
     return StreamingResponse(
@@ -130,6 +159,7 @@ async def stream_batch_progress(batch_id: str):
             "Connection": "keep-alive",
         }
     )
+    
 # --- Chat ---
 @router.get("/chat", response_model=List[ChatSession], tags=["Chat"])
 async def list_chats(limit: int = 50):
