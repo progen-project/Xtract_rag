@@ -106,7 +106,15 @@ async def stream_batch_progress(batch_id: str):
         async for data in rag_service.stream_batch_progress(batch_id):
             yield f"data: {json.dumps(data)}\n\n"
             
-    return StreamingResponse(generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
 
 # --- Chat ---
 @router.get("/chat", response_model=List[ChatSession], tags=["Chat"])
