@@ -2,16 +2,9 @@
 PetroRAG - Multimodal RAG Pipeline API
 
 Entry point for the FastAPI application.
+Logging is configured automatically by create_app() via logging_config.
 """
-import logging
-
 from app.core import create_app
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 
 # Create FastAPI application
 app = create_app()

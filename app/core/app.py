@@ -11,6 +11,8 @@ from pathlib import Path
 import logging
 
 from .lifespan import lifespan
+from .logging_config import setup_logging
+from .logging_middleware import RequestLoggingMiddleware
 from app.utils.exceptions import (
     CategoryNotFoundError,
     DocumentNotFoundError,
@@ -28,6 +30,15 @@ def create_app() -> FastAPI:
     Returns:
         Configured FastAPI application instance.
     """
+    # ── Initialize logging first ──
+    from app.config.settings import get_settings
+    settings = get_settings()
+    setup_logging(
+        log_level=settings.log_level,
+        log_dir=settings.log_dir,
+        log_json=settings.log_json,
+    )
+    
     app = FastAPI(
         title="PetroRAG API",
         description="""
@@ -43,6 +54,9 @@ def create_app() -> FastAPI:
         version="3.0.0",
         lifespan=lifespan
     )
+    
+    # ── Request logging middleware (must be added before CORS) ──
+    app.add_middleware(RequestLoggingMiddleware)
     
     # Configure CORS
     app.add_middleware(
@@ -63,9 +77,6 @@ def create_app() -> FastAPI:
     _register_root_endpoints(app)
     
     # Mount static file directories for images
-    from app.config.settings import get_settings
-    settings = get_settings()
-    
     if settings.images_dir.exists():
         app.mount("/extracted_images", StaticFiles(directory=str(settings.images_dir)), name="extracted_images")
     
@@ -76,22 +87,26 @@ def create_app() -> FastAPI:
 
 
 def _register_exception_handlers(app: FastAPI) -> None:
-    """Register custom exception handlers."""
+    """Register custom exception handlers with logging."""
     
     @app.exception_handler(CategoryNotFoundError)
     async def category_not_found_handler(request, exc):
+        logger.warning(f"Category not found: {exc.category_id} — {request.method} {request.url.path}")
         return JSONResponse(status_code=404, content={"detail": str(exc)})
     
     @app.exception_handler(DocumentNotFoundError)
     async def document_not_found_handler(request, exc):
+        logger.warning(f"Document not found: {exc.document_id} — {request.method} {request.url.path}")
         return JSONResponse(status_code=404, content={"detail": str(exc)})
     
     @app.exception_handler(ChatNotFoundError)
     async def chat_not_found_handler(request, exc):
+        logger.warning(f"Chat not found: {exc.chat_id} — {request.method} {request.url.path}")
         return JSONResponse(status_code=404, content={"detail": str(exc)})
     
     @app.exception_handler(ValidationError)
     async def validation_error_handler(request, exc):
+        logger.warning(f"Validation error: {exc} — {request.method} {request.url.path}")
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 

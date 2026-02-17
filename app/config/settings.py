@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     chat_context_window: int = Field(default=10, alias="CHAT_CONTEXT_WINDOW")
     max_chat_images: int = Field(default=10, alias="MAX_CHAT_IMAGES")
     
+    # Logging Configuration
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    log_dir: Path = Field(default=Path("./logs"), alias="LOG_DIR")
+    log_json: bool = Field(default=True, alias="LOG_JSON")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
