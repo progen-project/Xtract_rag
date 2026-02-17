@@ -2,8 +2,32 @@
  * PetroRAG API Client
  * Wraps all communication with the Python Client Proxy (port 8001).
  */
-const API_BASE = 'http://localhost:8001/client-api';
-const BACKEND_BASE = 'http://localhost:8000';
+// Detect environment or use config
+const HOST = window.location.hostname;
+const PROTOCOL = window.location.protocol;
+const PORT_CLIENT = '8001';
+const PORT_BACKEND = '8000';
+
+// If running on localhost, use distinct ports.
+// If deployed (e.g. via Nginx reverse proxy), these usually map to paths like /api or /client-api
+// But for this Docker setup where ports are exposed directly:
+// const API_BASE = `${PROTOCOL}//${HOST}:${PORT_CLIENT}/client-api`;
+// const BACKEND_BASE = `${PROTOCOL}//${HOST}:${PORT_BACKEND}`;
+
+// Docker on github code space :
+// function replacePortInHostname(hostname, newPort) {
+//   // Codespaces format: name-8002.app.github.dev
+//   return hostname.replace(/-\d+\.app\.github\.dev$/, `-${newPort}.app.github.dev`);
+// }
+
+// const API_HOST = replacePortInHostname(HOST, PORT_CLIENT);
+// const BACKEND_HOST = replacePortInHostname(HOST, PORT_BACKEND);
+
+// const API_BASE = `${PROTOCOL}//${API_HOST}/client-api`;
+// const BACKEND_BASE = `${PROTOCOL}//${BACKEND_HOST}`;
+
+const API_BASE = "/client-api";
+const BACKEND_BASE = "/api";
 
 class Api {
     /**
