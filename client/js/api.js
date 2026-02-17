@@ -126,6 +126,33 @@ class Api {
         return `${API_BASE}/documents/${documentId}/download`;
     }
 
+    
+    /**
+     * Download a document with the correct filename.
+     * Uses fetch + blob to bypass cross-origin download attribute limitations.
+     */
+    static async downloadDocumentBlob(documentId, suggestedFilename) {
+        const res = await fetch(`${API_BASE}/documents/${documentId}/download`);
+        if (!res.ok) throw new Error('Download failed');
+
+        // Extract filename from Content-Disposition header
+        const disp = res.headers.get('content-disposition') || '';
+        let filename = suggestedFilename || 'document.pdf';
+        const match = disp.match(/filename="?([^";\n]+)"?/);
+        if (match) filename = match[1].trim();
+
+        // Create blob URL (same-origin) so download attribute works
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
     static async cleanupDaily() {
         const res = await fetch(`${API_BASE}/documents/cleanup/daily`, {
             method: 'DELETE'
