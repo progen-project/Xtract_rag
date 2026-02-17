@@ -1,0 +1,62 @@
+{
+	"_description": "Batch DTOs — matches app/routers/batch_router.py and ProcessingStatusManager",
+
+	"BatchStatusResponse": {
+		"description": "GET /api/batches/{batch_id} — one-time snapshot of batch processing status.",
+		"fields": {
+			"batch_id": { "type": "string", "required": true },
+			"files": { "type": "object", "required": true, "description": "Map: filename → {status, detail}" },
+			"timestamp": { "type": "datetime (ISO 8601)", "required": true }
+		},
+		"file_entry": {
+			"status": "One of: pending | parsing | extracting_images | chunking | indexing | indexing_images | analyzing_images | indexing_tables | completed | failed",
+			"detail": "Human-readable progress message"
+		},
+		"example": {
+			"batch_id": "batch_9876543210zy",
+			"files": {
+				"Well_Report_2024.pdf": {
+					"status": "indexing",
+					"detail": "Indexing 45 chunks..."
+				},
+				"Safety_Manual.pdf": {
+					"status": "completed",
+					"detail": "Processing completed successfully."
+				}
+			},
+			"timestamp": "2024-06-15T09:05:00"
+		}
+	},
+
+	"SSEProgressEvent": {
+		"description": "GET /api/batches/{batch_id}/progress — Server-Sent Events stream. Each event is a JSON object.",
+		"fields": {
+			"filename": { "type": "string", "required": true },
+			"status": { "type": "string", "required": true },
+			"detail": { "type": "string", "required": true }
+		},
+		"example_stream": [
+			"data: {\"filename\": \"report.pdf\", \"status\": \"parsing\", \"detail\": \"Parsing PDF document...\"}",
+			"data: {\"filename\": \"report.pdf\", \"status\": \"chunking\", \"detail\": \"Chunking 12 sections...\"}",
+			"data: {\"filename\": \"report.pdf\", \"status\": \"indexing\", \"detail\": \"Indexing 45 chunks...\"}",
+			"data: {\"filename\": \"report.pdf\", \"status\": \"completed\", \"detail\": \"Processing completed successfully.\"}"
+		],
+		"frontend_usage": "const evtSource = new EventSource('/api/batches/{batch_id}/progress'); evtSource.onmessage = (e) => { const data = JSON.parse(e.data); updateProgress(data.filename, data.status, data.detail); };"
+	},
+
+	"TerminateBatchResponse": {
+		"description": "POST /api/batches/{batch_id}/terminate — terminates a batch. Completed docs are kept.",
+		"fields": {
+			"batch_id": { "type": "string", "required": true },
+			"total_documents": { "type": "integer", "required": true },
+			"kept_completed": { "type": "integer", "required": true },
+			"deleted_incomplete": { "type": "integer", "required": true }
+		},
+		"example": {
+			"batch_id": "batch_9876543210zy",
+			"total_documents": 5,
+			"kept_completed": 3,
+			"deleted_incomplete": 2
+		}
+	}
+}

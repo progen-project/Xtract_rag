@@ -1,0 +1,55 @@
+{
+	"_description": "Category DTOs — matches app/schemas/category.py",
+
+	"CategoryCreate": {
+		"description": "POST /api/categories — request body.",
+		"fields": {
+			"name": { "type": "string", "required": true },
+			"description": { "type": "string | null", "required": false }
+		},
+		"example": {
+			"name": "Drilling Reports",
+			"description": "Technical drilling reports and logs"
+		}
+	},
+
+	"CategoryUpdate": {
+		"description": "PUT /api/categories/{category_id} — request body. All fields optional.",
+		"fields": {
+			"name": { "type": "string | null", "required": false },
+			"description": { "type": "string | null", "required": false }
+		},
+		"example": {
+			"name": "Updated Name",
+			"description": "Updated description"
+		}
+	},
+
+	"CategoryResponse": {
+		"description": "Returned by all category endpoints (create, get, list, update).",
+		"fields": {
+			"category_id": { "type": "string", "required": true },
+			"name": { "type": "string", "required": true },
+			"description": { "type": "string | null", "required": true },
+			"document_count": { "type": "integer", "required": true },
+			"created_at": { "type": "datetime (ISO 8601)", "required": true }
+		},
+		"example": {
+			"category_id": "cat_a1b2c3d4e5f6",
+			"name": "Drilling Reports",
+			"description": "Technical drilling reports and logs",
+			"document_count": 12,
+			"created_at": "2024-06-15T08:30:00"
+		}
+	},
+
+	"DeleteResponse": {
+		"description": "DELETE /api/categories/{category_id} — response.",
+		"fields": {
+			"message": { "type": "string", "required": true }
+		},
+		"example": {
+			"message": "Category cat_a1b2c3d4e5f6 deleted"
+		}
+	}
+}

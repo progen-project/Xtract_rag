@@ -1,0 +1,106 @@
+{
+	"_description": "Common DTOs — shared error shapes, enums, and reusable types",
+
+	"ErrorResponse": {
+		"description": "Standard error response returned by all endpoints on failure (400, 404, 422, 500).",
+		"fields": {
+			"detail": { "type": "string | ValidationDetail[]", "required": true }
+		},
+		"examples": {
+			"404_not_found": {
+				"detail": "Document not found: doc_nonexistent"
+			},
+			"400_bad_request": {
+				"detail": "Maximum 50 files allowed per batch"
+			},
+			"422_validation_error": {
+				"detail": [
+					{
+						"loc": ["body", "name"],
+						"msg": "field required",
+						"type": "value_error.missing"
+					}
+				]
+			}
+		}
+	},
+
+	"ValidationDetail": {
+		"description": "A single validation error inside a 422 response detail array.",
+		"fields": {
+			"loc": { "type": "string[]", "required": true, "description": "Path to the invalid field, e.g. ['body', 'name']" },
+			"msg": { "type": "string", "required": true },
+			"type": { "type": "string", "required": true }
+		}
+	},
+
+	"DocumentStatus": {
+		"description": "Enum for document processing state.",
+		"type": "string",
+		"values": ["pending", "processing", "completed", "failed"]
+	},
+
+	"BatchFileStatus": {
+		"description": "Enum for individual file processing steps within a batch.",
+		"type": "string",
+		"values": ["pending", "processing", "parsing", "extracting_images", "chunking", "indexing", "analyzing_images", "indexing_images", "indexing_tables", "completed", "failed"]
+	},
+
+	"ExtractedImage": {
+		"description": "Image extracted from a PDF, referenced by image_id in chunks.",
+		"fields": {
+			"image_id": { "type": "string", "required": true },
+			"document_id": { "type": "string", "required": true },
+			"category_id": { "type": "string", "required": true },
+			"page_number": { "type": "integer", "required": true },
+			"image_path": { "type": "string", "required": true },
+			"image_format": { "type": "string", "required": true, "description": "e.g. 'png', 'jpeg'" },
+			"width": { "type": "integer", "required": true },
+			"height": { "type": "integer", "required": true },
+			"caption": { "type": "string | null", "required": false },
+			"section_title": { "type": "string | null", "required": false },
+			"chunk_ids": { "type": "string[]", "required": true, "description": "Chunks that reference this image" },
+			"analysis": { "type": "string | null", "required": false, "description": "AI-generated analysis of the image" }
+		},
+		"example": {
+			"image_id": "img_001",
+			"document_id": "doc_1a2b3c4d5e6f",
+			"category_id": "cat_a1b2c3d4e5f6",
+			"page_number": 13,
+			"image_path": "/extracted_images/doc_1a2b3c4d5e6f/img_001.png",
+			"image_format": "png",
+			"width": 800,
+			"height": 600,
+			"caption": "Figure 4.1: Well Profile",
+			"section_title": "Well Diagram",
+			"chunk_ids": ["doc_1a2b_chunk_12"],
+			"analysis": "This diagram shows a cross-section of the well bore reaching 15,000ft total depth..."
+		}
+	},
+
+	"ExtractedTable": {
+		"description": "Table extracted from a PDF.",
+		"fields": {
+			"table_id": { "type": "string", "required": true },
+			"document_id": { "type": "string", "required": true },
+			"page_number": { "type": "integer", "required": true },
+			"section_title": { "type": "string | null", "required": false },
+			"headers": { "type": "string[]", "required": true },
+			"rows": { "type": "string[][]", "required": true },
+			"markdown_content": { "type": "string", "required": true }
+		},
+		"example": {
+			"table_id": "tbl_001",
+			"document_id": "doc_1a2b3c4d5e6f",
+			"page_number": 8,
+			"section_title": "Production Data",
+			"headers": ["Quarter", "Production (bbl/day)", "Revenue ($M)"],
+			"rows": [
+				["Q1", "38,000", "12.5"],
+				["Q2", "41,000", "14.2"],
+				["Q3", "45,000", "15.8"]
+			],
+			"markdown_content": "| Quarter | Production (bbl/day) | Revenue ($M) |\n|---------|---------------------|-------------|\n| Q1 | 38,000 | 12.5 |\n| Q2 | 41,000 | 14.2 |\n| Q3 | 45,000 | 15.8 |"
+		}
+	}
+}

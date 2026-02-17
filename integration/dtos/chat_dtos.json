@@ -1,46 +1,167 @@
 {
-  "ChatRequest": {
-    "description": "Request body for chat endpoint (often sent as FormData if uploading images).",
-    "example": {
-      "message": "Explain this document",
-      "chat_id": "optional_chat_id",
-      "category_ids": ["cat_finance"],
-      "top_k": 5
-    }
-  },
-  "ChatResponse": {
-    "description": "Response containing the assistant's answer and sources.",
-    "example": {
-      "chat_id": "chat_123abc",
-      "message_id": "msg_456def",
-      "answer": "This document discusses...",
-      "sources": {
-        "doc_1234567890ab": [1, 2]
-      },
-      "image_results": []
-    }
-  },
-  "ChatSession": {
-    "description": "Full chat history and metadata.",
-    "example": {
-      "chat_id": "chat_123abc",
-      "category_ids": ["cat_finance"],
-      "created_at": "2023-10-27T10:00:00.123456",
-      "updated_at": "2023-10-27T10:05:00.123456",
-      "messages": [
-        {
-          "message_id": "msg_user_1",
-          "role": "user",
-          "content": "Hello",
-          "timestamp": "2023-10-27T10:00:00.123456"
-        },
-        {
-          "message_id": "msg_assistant_1",
-          "role": "assistant",
-          "content": "Hi there!",
-          "timestamp": "2023-10-27T10:00:01.123456"
-        }
-      ]
-    }
-  }
+	"_description": "Chat DTOs — matches app/schemas/chat.py",
+
+	"ChatRequest": {
+		"description": "POST /api/chat — sent as multipart/form-data (supports image uploads).",
+		"content_type": "multipart/form-data",
+		"fields": {
+			"message": { "type": "string", "required": true, "description": "User's question" },
+			"chat_id": { "type": "string | null", "required": false, "description": "Existing session ID to continue a conversation" },
+			"category_ids": { "type": "JSON string of string[]", "required": false, "description": "e.g. '[\"cat_a1b2\",\"cat_c3d4\"]'" },
+			"top_k": { "type": "integer (1-20)", "required": false, "default": 5, "description": "Number of chunks to retrieve" },
+			"images": { "type": "File[]", "required": false, "description": "Image attachments (max 10)" }
+		},
+		"example": {
+			"message": "What is the total depth of the well?",
+			"chat_id": null,
+			"category_ids": "[\"cat_a1b2c3d4e5f6\"]",
+			"top_k": 5
+		}
+	},
+
+	"ChatResponse": {
+		"description": "POST /api/chat — response with AI answer and structured sources.",
+		"fields": {
+			"chat_id": { "type": "string", "required": true, "description": "Session ID — save this for follow-up messages" },
+			"message_id": { "type": "string", "required": true },
+			"answer": { "type": "string", "required": true, "description": "AI-generated answer with inline citation markers like [Source 1, Page 12]" },
+			"sources": { "type": "object", "required": true, "description": "Map: document_id → {filename, pages[]}" },
+			"inline_citations": { "type": "InlineCitation[]", "required": true, "description": "Structured citations linking answer parts to source sections" },
+			"image_results": { "type": "ImageSearchResult[]", "required": true, "description": "Related images found during retrieval" }
+		},
+		"example": {
+			"chat_id": "chat_a1b2c3d4",
+			"message_id": "msg_e5f6g7h8",
+			"answer": "Based on the drilling report [Source 1, Page 12], the well reached a total depth of 15,000 ft. The formation analysis [Source 2, Page 8] indicates high porosity.",
+			"sources": {
+				"doc_1a2b3c4d5e6f": { "filename": "Well_Report_2024.pdf", "pages": [12, 13] },
+				"doc_7a8b9c0d1e2f": { "filename": "Formation_Analysis.pdf", "pages": [8] }
+			},
+			"inline_citations": [
+				{
+					"source_number": 1,
+					"document_id": "doc_1a2b3c4d5e6f",
+					"filename": "Well_Report_2024.pdf",
+					"section_title": "Drilling Summary",
+					"pages": [12]
+				},
+				{
+					"source_number": 2,
+					"document_id": "doc_7a8b9c0d1e2f",
+					"filename": "Formation_Analysis.pdf",
+					"section_title": "Porosity Analysis",
+					"pages": [8]
+				}
+			],
+			"image_results": [
+				{
+					"image_id": "img_001",
+					"document_id": "doc_1a2b3c4d5e6f",
+					"page_number": 13,
+					"section_title": "Well Diagram",
+					"caption": "Figure 4.1: Well Profile",
+					"image_path": "/extracted_images/doc_1a2b3c4d5e6f/img_001.png",
+					"score": 0.88
+				}
+			]
+		}
+	},
+
+	"InlineCitation": {
+		"description": "Structured citation linking a part of the answer to a specific source.",
+		"fields": {
+			"source_number": { "type": "integer (1-based)", "required": true },
+			"document_id": { "type": "string", "required": true },
+			"filename": { "type": "string", "required": true },
+			"section_title": { "type": "string", "required": true },
+			"pages": { "type": "integer[]", "required": true }
+		},
+		"example": {
+			"source_number": 1,
+			"document_id": "doc_1a2b3c4d5e6f",
+			"filename": "Well_Report_2024.pdf",
+			"section_title": "Drilling Summary",
+			"pages": [12, 13]
+		}
+	},
+
+	"ChatMessage": {
+		"description": "A single message inside a ChatSession.messages[] array.",
+		"fields": {
+			"message_id": { "type": "string", "required": true },
+			"role": { "type": "\"user\" | \"assistant\"", "required": true },
+			"content": { "type": "string", "required": true },
+			"image_paths": { "type": "string[]", "required": true, "description": "Paths to uploaded images (user) or retrieved images (assistant)" },
+			"sources": { "type": "object | null", "required": true, "description": "For assistant messages: {doc_id → {filename, pages[]}}. Null for user messages." },
+			"timestamp": { "type": "datetime (ISO 8601)", "required": true }
+		},
+		"example": {
+			"message_id": "msg_user_001",
+			"role": "user",
+			"content": "What is the total depth?",
+			"image_paths": [],
+			"sources": null,
+			"timestamp": "2024-06-15T10:00:00"
+		}
+	},
+
+	"ChatSession": {
+		"description": "GET /api/chat/{chat_id} — full chat session with message history.",
+		"fields": {
+			"chat_id": { "type": "string", "required": true },
+			"category_ids": { "type": "string[] | null", "required": true },
+			"messages": { "type": "ChatMessage[]", "required": true },
+			"created_at": { "type": "datetime (ISO 8601)", "required": true },
+			"updated_at": { "type": "datetime (ISO 8601)", "required": true }
+		},
+		"example": {
+			"chat_id": "chat_a1b2c3d4",
+			"category_ids": ["cat_a1b2c3d4e5f6"],
+			"messages": [
+				{
+					"message_id": "msg_user_001",
+					"role": "user",
+					"content": "What is the total depth?",
+					"image_paths": [],
+					"sources": null,
+					"timestamp": "2024-06-15T10:00:00"
+				},
+				{
+					"message_id": "msg_asst_001",
+					"role": "assistant",
+					"content": "Based on the report, the total depth is 15,000 ft.",
+					"image_paths": [],
+					"sources": {
+						"doc_1a2b3c4d5e6f": { "filename": "Well_Report_2024.pdf", "pages": [12] }
+					},
+					"timestamp": "2024-06-15T10:00:05"
+				}
+			],
+			"created_at": "2024-06-15T10:00:00",
+			"updated_at": "2024-06-15T10:00:05"
+		}
+	},
+
+	"StreamingSSE": {
+		"description": "POST /api/chat/stream — Server-Sent Events format. Tokens arrive one-by-one, final event has full metadata.",
+		"token_event": {
+			"description": "Intermediate event with a single text token.",
+			"example": "data: {\"token\": \"Based\"}"
+		},
+		"final_event": {
+			"description": "Last event with done=true and full response metadata (same shape as ChatResponse).",
+			"example": "data: {\"done\": true, \"chat_id\": \"chat_a1b2\", \"message_id\": \"msg_e5f6\", \"answer\": \"Based on the report...\", \"sources\": {\"doc_1a2b\": {\"filename\": \"report.pdf\", \"pages\": [12]}}, \"inline_citations\": [{\"source_number\": 1, \"document_id\": \"doc_1a2b\", \"filename\": \"report.pdf\", \"section_title\": \"Summary\", \"pages\": [12]}], \"image_results\": []}"
+		},
+		"frontend_usage": "const response = await fetch('/api/chat/stream', {method:'POST', body:formData}); const reader = response.body.getReader();"
+	},
+
+	"DeleteResponse": {
+		"description": "DELETE /api/chat/{chat_id} — response.",
+		"fields": {
+			"message": { "type": "string", "required": true }
+		},
+		"example": {
+			"message": "Chat chat_a1b2c3d4 deleted"
+		}
+	}
 }

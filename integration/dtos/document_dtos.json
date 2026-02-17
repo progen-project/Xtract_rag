@@ -1,41 +1,101 @@
 {
-  "DocumentUploadResponse": {
-    "description": "Response array returned after uploading documents.",
-    "example": [
-      {
-        "document_id": "doc_1234567890ab",
-        "category_id": "cat_finance",
-        "filename": "annual_report.pdf",
-        "message": "Document uploaded. Processing started.",
-        "status": "pending",
-        "batch_id": "batch_9876543210zy"
-      }
-    ]
-  },
-  "DocumentMetadata": {
-    "description": "Full metadata of a document.",
-    "example": {
-      "document_id": "doc_1234567890ab",
-      "category_id": "cat_finance",
-      "filename": "annual_report.pdf",
-      "file_path": "uploads/finance/uuid_annual_report.pdf",
-      "file_size": 102400,
-      "page_count": 0,
-      "upload_date": "2023-10-27T10:00:00.123456",
-      "status": "processing",
-      "batch_id": "batch_9876543210zy",
-      "toc": [],
-      "processing_errors": []
-    }
-  },
-  "SSEProgressEvent": {
-    "description": "Event data streamed from /upload/progress/{batch_id}",
-    "example": {
-      "batch_id": "batch_9876543210zy",
-      "filename": "annual_report.pdf",
-      "status": "indexing",
-      "detail": "Indexing 45 chunks...",
-      "timestamp": "2023-10-27T10:00:05.123456"
-    }
-  }
+	"_description": "Document DTOs — matches app/schemas/document.py and document_router.py",
+
+	"DocumentUploadResponse": {
+		"description": "POST /api/documents/upload/{category_id} — returns an array of these.",
+		"fields": {
+			"document_id": { "type": "string", "required": true },
+			"category_id": { "type": "string", "required": true },
+			"filename": { "type": "string", "required": true },
+			"message": { "type": "string", "required": true },
+			"status": { "type": "DocumentStatus enum", "required": true },
+			"batch_id": { "type": "string | null", "required": true }
+		},
+		"example": [
+			{
+				"document_id": "doc_1a2b3c4d5e6f",
+				"category_id": "cat_a1b2c3d4e5f6",
+				"filename": "Well_Report_2024.pdf",
+				"message": "Document uploaded. Processing started.",
+				"status": "pending",
+				"batch_id": "batch_9876543210zy"
+			}
+		]
+	},
+
+	"DocumentMetadata": {
+		"description": "GET /api/documents/{document_id} or listed in GET /api/documents. Full document metadata.",
+		"fields": {
+			"document_id": { "type": "string", "required": true },
+			"category_id": { "type": "string", "required": true },
+			"filename": { "type": "string", "required": true },
+			"file_path": { "type": "string", "required": true },
+			"file_size": { "type": "integer (bytes)", "required": true },
+			"page_count": { "type": "integer", "required": true },
+			"upload_date": { "type": "datetime (ISO 8601)", "required": true },
+			"status": { "type": "DocumentStatus enum", "required": true },
+			"batch_id": { "type": "string | null", "required": false },
+			"is_daily": { "type": "boolean", "required": true, "description": "If true, auto-deletes after 24 hours" },
+			"toc": { "type": "TOCEntry[]", "required": true },
+			"processing_errors": { "type": "string[]", "required": true }
+		},
+		"example": {
+			"document_id": "doc_1a2b3c4d5e6f",
+			"category_id": "cat_a1b2c3d4e5f6",
+			"filename": "Well_Report_2024.pdf",
+			"file_path": "uploads/Drilling Reports/abc_Well_Report_2024.pdf",
+			"file_size": 2048576,
+			"page_count": 45,
+			"upload_date": "2024-06-15T09:00:00",
+			"status": "completed",
+			"batch_id": "batch_9876543210zy",
+			"is_daily": false,
+			"toc": [
+				{ "title": "Executive Summary", "level": 1, "page_number": 1, "page_end": 3 },
+				{ "title": "Drilling Operations", "level": 1, "page_number": 4, "page_end": 20 }
+			],
+			"processing_errors": []
+		}
+	},
+
+	"TOCEntry": {
+		"description": "Table of contents entry, nested inside DocumentMetadata.toc[].",
+		"fields": {
+			"title": { "type": "string", "required": true },
+			"level": { "type": "integer (1-based nesting depth)", "required": true },
+			"page_number": { "type": "integer", "required": true },
+			"page_end": { "type": "integer | null", "required": false }
+		},
+		"example": {
+			"title": "Executive Summary",
+			"level": 1,
+			"page_number": 1,
+			"page_end": 3
+		}
+	},
+
+	"DocumentStatus": {
+		"description": "Enum for document processing state.",
+		"values": ["pending", "processing", "completed", "failed"]
+	},
+
+	"DeleteResponse": {
+		"description": "DELETE /api/documents/{document_id} — response.",
+		"fields": {
+			"message": { "type": "string", "required": true }
+		},
+		"example": {
+			"message": "Document doc_1a2b3c4d5e6f deleted"
+		}
+	},
+
+	"BurnResponse": {
+		"description": "DELETE /api/documents/{document_id}/burn — full purge response.",
+		"fields": {
+			"message": { "type": "string", "required": true }
+		},
+		"example": {
+			"message": "Document doc_1a2b3c4d5e6f burned successfully"
+		}
+	}
 }

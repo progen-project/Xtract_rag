@@ -1,59 +1,151 @@
 {
-  "QueryRequest": {
-    "description": "Request for simple RAG query.",
-    "example": {
-      "query": "What is the net profit?",
-      "category_ids": ["cat_finance"],
-      "document_ids": [],
-      "top_k": 5,
-      "include_images": true,
-      "include_tables": true
-    }
-  },
-  "QueryResponse": {
-    "description": "Response containing retrieved chunks and generated answer.",
-    "example": {
-      "query": "What is the net profit?",
-      "answer": "The net profit is $1.5M.",
-      "retrieved_chunks": [
-        {
-          "chunk_id": "chunk_123",
-          "content": "Net profit was $1.5M...",
-          "score": 0.95,
-          "section_title": "Financial Summary",
-          "page_start": 5,
-          "page_end": 5,
-          "images": [],
-          "tables": []
-        }
-      ],
-      "sources": ["doc_1234567890ab"]
-    }
-  },
-  "ImageSearchRequest": {
-    "description": "Request to search for images by text or image content.",
-    "example": {
-      "query_text": "graph showing revenue",
-      "category_ids": ["cat_finance"],
-      "top_k": 5
-    }
-  },
-  "ImageSearchResponse": {
-    "description": "List of matching images.",
-    "example": {
-      "query_text": "graph showing revenue",
-      "has_query_image": false,
-      "count": 1,
-      "results": [
-        {
-          "image_id": "img_789",
-          "document_id": "doc_123",
-          "page_number": 6,
-          "caption": "Revenue Growth 2023",
-          "image_path": "extracted_images/img_789.png",
-          "score": 0.88
-        }
-      ]
-    }
-  }
+	"_description": "Query DTOs — matches app/schemas/query.py",
+
+	"QueryRequest": {
+		"description": "POST /api/query — one-shot RAG query request body (JSON).",
+		"fields": {
+			"query": { "type": "string", "required": true },
+			"category_ids": { "type": "string[]", "required": false, "description": "Filter to specific categories" },
+			"document_ids": { "type": "string[]", "required": false, "description": "Filter to specific documents" },
+			"top_k": { "type": "integer (1-20)", "required": false, "default": 5 },
+			"include_images": { "type": "boolean", "required": false, "default": true },
+			"include_tables": { "type": "boolean", "required": false, "default": true }
+		},
+		"example": {
+			"query": "What are the production statistics for Q3?",
+			"category_ids": ["cat_a1b2c3d4e5f6"],
+			"document_ids": [],
+			"top_k": 5,
+			"include_images": true,
+			"include_tables": true
+		}
+	},
+
+	"QueryResponse": {
+		"description": "POST /api/query — response with answer, chunks, and citations.",
+		"fields": {
+			"query": { "type": "string", "required": true },
+			"answer": { "type": "string", "required": true },
+			"retrieved_chunks": { "type": "RetrievedChunk[]", "required": true },
+			"sources": { "type": "string[]", "required": true, "description": "List of document_ids used" },
+			"inline_citations": { "type": "InlineCitation[]", "required": true, "description": "Same structure as in chat_dtos.json" }
+		},
+		"example": {
+			"query": "What are the production statistics for Q3?",
+			"answer": "According to the quarterly report [Source 1, Page 5], production increased by 15% in Q3.",
+			"retrieved_chunks": [
+				{
+					"chunk_id": "doc_1a2b_chunk_04",
+					"content": "Q3 production output reached 45,000 barrels per day...",
+					"score": 0.95,
+					"section_title": "Q3 Production Summary",
+					"page_start": 5,
+					"page_end": 6,
+					"image_ids": ["img_001"],
+					"images": [],
+					"tables": []
+				}
+			],
+			"sources": ["doc_1a2b3c4d5e6f"],
+			"inline_citations": [
+				{
+					"source_number": 1,
+					"document_id": "doc_1a2b3c4d5e6f",
+					"filename": "Quarterly_Report_Q3.pdf",
+					"section_title": "Q3 Production Summary",
+					"pages": [5]
+				}
+			]
+		}
+	},
+
+	"RetrievedChunk": {
+		"description": "A chunk of text retrieved from the vector index, inside QueryResponse.retrieved_chunks[].",
+		"fields": {
+			"chunk_id": { "type": "string", "required": true },
+			"content": { "type": "string", "required": true },
+			"score": { "type": "float (0-1)", "required": true },
+			"section_title": { "type": "string", "required": true },
+			"page_start": { "type": "integer", "required": true },
+			"page_end": { "type": "integer", "required": true },
+			"image_ids": { "type": "string[]", "required": true, "description": "IDs of images linked to this chunk" },
+			"images": { "type": "ExtractedImage[]", "required": true },
+			"tables": { "type": "ExtractedTable[]", "required": true }
+		},
+		"example": {
+			"chunk_id": "doc_1a2b_chunk_04",
+			"content": "Q3 production output reached 45,000 barrels per day...",
+			"score": 0.95,
+			"section_title": "Q3 Production Summary",
+			"page_start": 5,
+			"page_end": 6,
+			"image_ids": ["img_001"],
+			"images": [],
+			"tables": []
+		}
+	},
+
+	"ImageSearchRequest": {
+		"description": "POST /api/query/image-search — search for images by text or image content.",
+		"fields": {
+			"query_text": { "type": "string | null", "required": false, "description": "Text query (at least one of query_text or query_image_base64 required)" },
+			"query_image_base64": { "type": "string | null", "required": false, "description": "Base64-encoded image for visual similarity search" },
+			"category_ids": { "type": "string[]", "required": false },
+			"document_ids": { "type": "string[]", "required": false },
+			"top_k": { "type": "integer (1-20)", "required": false, "default": 5 }
+		},
+		"example": {
+			"query_text": "production flowchart diagram",
+			"category_ids": ["cat_a1b2c3d4e5f6"],
+			"top_k": 5
+		}
+	},
+
+	"ImageSearchResponse": {
+		"description": "POST /api/query/image-search — response.",
+		"fields": {
+			"query_text": { "type": "string | null", "required": true },
+			"has_query_image": { "type": "boolean", "required": true },
+			"results": { "type": "ImageSearchResult[]", "required": true },
+			"count": { "type": "integer", "required": true }
+		},
+		"example": {
+			"query_text": "production flowchart diagram",
+			"has_query_image": false,
+			"results": [
+				{
+					"image_id": "img_001",
+					"document_id": "doc_1a2b3c4d5e6f",
+					"page_number": 13,
+					"section_title": "Process Flow",
+					"caption": "Figure 4.1: Production Flowchart",
+					"image_path": "/extracted_images/doc_1a2b3c4d5e6f/img_001.png",
+					"score": 0.92
+				}
+			],
+			"count": 1
+		}
+	},
+
+	"ImageSearchResult": {
+		"description": "A single image result, used in ImageSearchResponse.results[] and ChatResponse.image_results[].",
+		"fields": {
+			"image_id": { "type": "string", "required": true },
+			"document_id": { "type": "string", "required": true },
+			"page_number": { "type": "integer", "required": true },
+			"section_title": { "type": "string", "required": true },
+			"caption": { "type": "string | null", "required": false },
+			"image_path": { "type": "string", "required": true, "description": "Relative path to serve the image" },
+			"score": { "type": "float (0-1)", "required": true }
+		},
+		"example": {
+			"image_id": "img_001",
+			"document_id": "doc_1a2b3c4d5e6f",
+			"page_number": 13,
+			"section_title": "Process Flow",
+			"caption": "Figure 4.1: Production Flowchart",
+			"image_path": "/extracted_images/doc_1a2b3c4d5e6f/img_001.png",
+			"score": 0.92
+		}
+	}
 }
