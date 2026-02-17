@@ -1,15 +1,15 @@
 {
 	"info": {
-		"_postman_id": "petrorag-api-collection-v1",
+		"_postman_id": "petrorag-api-collection-v2",
 		"name": "PetroRAG API",
-		"description": "Complete API collection for PetroRAG — a multimodal RAG pipeline for document management, chat, and query.\n\n## Architecture\n- **Main API** (port 8000): Core backend with all business logic\n- **Client Proxy** (port 8001): Strongly-typed FastAPI proxy layer\n\nThis collection targets the **Main API** (`{{base_url}}`). For client proxy requests, use `{{client_url}}`.\n\n## Quick Start\n1. Import this collection and the environment file\n2. Start the backend: `uvicorn app.main:app --port 8000`\n3. Run requests in order: Create Category → Upload → Chat/Query",
+		"description": "Complete API collection for PetroRAG — a multimodal RAG pipeline for document management, chat, and query.\n\n## Architecture\n- **Main API** (port 8000): Core backend — `{{base_url}}`\n- **Client Proxy** (port 8001): Typed proxy layer — `{{client_url}}`\n\n## Quick Start\n1. Import this collection and the environment file\n2. Start the backend: `uvicorn app.main:app --port 8000`\n3. Run requests in order: Create Category → Upload → Chat/Query\n\n## Response Schema Notes\n- All timestamps are ISO 8601 format\n- Document status: `pending` | `processing` | `completed` | `failed`\n- Errors return `{\"detail\": \"...\"}`\n- Streaming endpoints use Server-Sent Events (SSE)",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [],
 	"item": [
 		{
 			"name": "Categories",
-			"description": "CRUD operations for organizing documents into categories.",
+			"description": "CRUD operations for document categories.",
 			"item": [
 				{
 					"name": "Create Category",
@@ -23,7 +23,6 @@
 									"    pm.environment.set('category_id', json.category_id);",
 									"    pm.test('Category created', () => {",
 									"        pm.expect(json).to.have.property('category_id');",
-									"        pm.expect(json).to.have.property('name');",
 									"    });",
 									"}"
 								],
@@ -41,18 +40,22 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"name\": \"Finance Reports 2024\",\n    \"description\": \"Annual and quarterly financial reports\"\n}"
+							"raw": "{\n    \"name\": \"Drilling Reports\",\n    \"description\": \"Technical drilling reports and logs\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/categories",
-							"host": ["{{base_url}}"],
-							"path": ["categories"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"categories"
+							]
 						},
-						"description": "Create a new category to organize documents.\n\n**Request Body:**\n- `name` (string, required): Category name\n- `description` (string, optional): Description\n\n**Response:** CategoryResponse object with `category_id`, `name`, `description`, `document_count`, `created_at`"
+						"description": "Create a new document category.\n\n**Request Body (JSON):**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `name` | string | ✅ | Category name |\n| `description` | string | ❌ | Optional description |\n\n**Response:** `CategoryResponse`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Created",
 							"originalRequest": {
 								"method": "POST",
 								"header": [
@@ -61,10 +64,6 @@
 										"value": "application/json"
 									}
 								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"Finance Reports 2024\",\n    \"description\": \"Annual and quarterly financial reports\"\n}"
-								},
 								"url": {
 									"raw": "{{base_url}}/categories",
 									"host": [
@@ -73,10 +72,14 @@
 									"path": [
 										"categories"
 									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"name\": \"Drilling Reports\", \"description\": \"Technical drilling reports and logs\"}"
 								}
 							},
-							"status": "Created",
-							"code": 201,
+							"status": "OK",
+							"code": 200,
 							"_postman_previewlanguage": "json",
 							"header": [
 								{
@@ -85,7 +88,43 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"category_id\": \"cat_789\",\n    \"name\": \"Finance Reports 2024\",\n    \"description\": \"Annual and quarterly financial reports\",\n    \"document_count\": 0,\n    \"created_at\": \"2024-03-15T10:00:00\"\n}"
+							"body": "{\n    \"category_id\": \"a1b2c3d4e5f6\",\n    \"name\": \"Drilling Reports\",\n    \"description\": \"Technical drilling reports and logs\",\n    \"document_count\": 0,\n    \"created_at\": \"2024-06-15T08:30:00\"\n}"
+						},
+						{
+							"name": "422 — Validation Error",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/categories",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"categories"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"description\": \"Missing name field\"}"
+								}
+							},
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": [\n        {\n            \"loc\": [\n                \"body\",\n                \"name\"\n            ],\n            \"msg\": \"field required\",\n            \"type\": \"value_error.missing\"\n        }\n    ]\n}"
 						}
 					]
 				},
@@ -96,15 +135,9 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test('Returns array', () => {",
-									"    pm.expect(pm.response.json()).to.be.an('array');",
-									"});",
-									"",
-									"// Save first category ID if available",
+									"pm.test('Returns array', () => pm.expect(pm.response.json()).to.be.an('array'));",
 									"const cats = pm.response.json();",
-									"if (cats.length > 0) {",
-									"    pm.environment.set('category_id', cats[0].category_id);",
-									"}"
+									"if (cats.length > 0) pm.environment.set('category_id', cats[0].category_id);"
 								],
 								"type": "text/javascript"
 							}
@@ -114,14 +147,18 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/categories",
-							"host": ["{{base_url}}"],
-							"path": ["categories"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"categories"
+							]
 						},
-						"description": "List all categories.\n\n**Response:** Array of CategoryResponse objects."
+						"description": "List all categories.\n\n**Response:** `CategoryResponse[]`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
@@ -145,7 +182,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "[\n    {\n        \"category_id\": \"cat_123\",\n        \"name\": \"Finance\",\n        \"description\": \"Financial reports\",\n        \"document_count\": 10,\n        \"created_at\": \"2024-01-01T00:00:00\"\n    },\n    {\n        \"category_id\": \"cat_456\",\n        \"name\": \"Engineering\",\n        \"description\": \"Technical specs\",\n        \"document_count\": 5,\n        \"created_at\": \"2024-01-02T00:00:00\"\n    }\n]"
+							"body": "[\n    {\n        \"category_id\": \"a1b2c3d4e5f6\",\n        \"name\": \"Drilling Reports\",\n        \"description\": \"Technical drilling reports\",\n        \"document_count\": 12,\n        \"created_at\": \"2024-06-15T08:30:00\"\n    },\n    {\n        \"category_id\": \"f6e5d4c3b2a1\",\n        \"name\": \"Safety Manuals\",\n        \"description\": \"HSE documentation\",\n        \"document_count\": 5,\n        \"created_at\": \"2024-07-01T10:00:00\"\n    }\n]"
 						}
 					]
 				},
@@ -155,14 +192,19 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/categories/{{category_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["categories", "{{category_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"categories",
+								"{{category_id}}"
+							]
 						},
-						"description": "Get a specific category by ID.\n\n**Path Params:**\n- `category_id`: The category's unique ID"
+						"description": "Get a single category by ID.\n\n**Path:** `category_id`\n\n**Response:** `CategoryResponse`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
@@ -187,7 +229,35 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"category_id\": \"cat_123\",\n    \"name\": \"Finance\",\n    \"description\": \"Financial reports\",\n    \"document_count\": 10,\n    \"created_at\": \"2024-01-01T00:00:00\"\n}"
+							"body": "{\n    \"category_id\": \"a1b2c3d4e5f6\",\n    \"name\": \"Drilling Reports\",\n    \"description\": \"Technical drilling reports and logs\",\n    \"document_count\": 12,\n    \"created_at\": \"2024-06-15T08:30:00\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/categories/bad_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"categories",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Category not found\"\n}"
 						}
 					]
 				},
@@ -203,18 +273,23 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"name\": \"Finance Reports 2025\",\n    \"description\": \"Updated description\"\n}"
+							"raw": "{\n    \"name\": \"Updated Name\",\n    \"description\": \"Updated description\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/categories/{{category_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["categories", "{{category_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"categories",
+								"{{category_id}}"
+							]
 						},
-						"description": "Update a category's name and/or description.\n\n**Request Body (all optional):**\n- `name` (string): New name\n- `description` (string): New description"
+						"description": "Update a category name and/or description.\n\n**Request Body (JSON):**\n| Field | Type | Required |\n|-------|------|----------|\n| `name` | string | ❌ |\n| `description` | string | ❌ |\n\n**Response:** `CategoryResponse`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Updated",
 							"originalRequest": {
 								"method": "PUT",
 								"header": [
@@ -223,10 +298,6 @@
 										"value": "application/json"
 									}
 								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"Finance Reports 2025\",\n    \"description\": \"Updated description\"\n}"
-								},
 								"url": {
 									"raw": "{{base_url}}/categories/{{category_id}}",
 									"host": [
@@ -236,6 +307,10 @@
 										"categories",
 										"{{category_id}}"
 									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"name\": \"Updated Name\"}"
 								}
 							},
 							"status": "OK",
@@ -248,7 +323,40 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"category_id\": \"cat_123\",\n    \"name\": \"Finance Reports 2025\",\n    \"description\": \"Updated description\",\n    \"document_count\": 10,\n    \"created_at\": \"2024-01-01T00:00:00\"\n}"
+							"body": "{\n    \"category_id\": \"a1b2c3d4e5f6\",\n    \"name\": \"Updated Name\",\n    \"description\": \"Updated description\",\n    \"document_count\": 12,\n    \"created_at\": \"2024-06-15T08:30:00\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/categories/bad_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"categories",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Category not found\"\n}"
 						}
 					]
 				},
@@ -258,14 +366,19 @@
 						"method": "DELETE",
 						"url": {
 							"raw": "{{base_url}}/categories/{{category_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["categories", "{{category_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"categories",
+								"{{category_id}}"
+							]
 						},
-						"description": "Delete a category. Documents remain but lose their category grouping."
+						"description": "Delete a category. Documents remain but lose their category grouping.\n\n**Response:** `{message}`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Deleted",
 							"originalRequest": {
 								"method": "DELETE",
 								"header": [],
@@ -290,7 +403,35 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"status\": \"success\",\n    \"message\": \"Category deleted successfully\"\n}"
+							"body": "{\n    \"message\": \"Category a1b2c3d4e5f6 deleted\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/categories/bad_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"categories",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Category not found\"\n}"
 						}
 					]
 				}
@@ -313,12 +454,6 @@
 									"        pm.environment.set('document_id', json[0].document_id);",
 									"        pm.environment.set('batch_id', json[0].batch_id);",
 									"    }",
-									"    pm.test('Upload returns documents', () => {",
-									"        pm.expect(json).to.be.an('array');",
-									"        pm.expect(json.length).to.be.greaterThan(0);",
-									"        pm.expect(json[0]).to.have.property('document_id');",
-									"        pm.expect(json[0]).to.have.property('batch_id');",
-									"    });",
 									"}"
 								],
 								"type": "text/javascript"
@@ -333,34 +468,30 @@
 								{
 									"key": "files",
 									"type": "file",
-									"description": "PDF file(s) to upload. Select one or more PDF files.",
+									"description": "PDF file(s) to upload",
 									"src": []
 								}
 							]
 						},
 						"url": {
 							"raw": "{{base_url}}/documents/upload/{{category_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["documents", "upload", "{{category_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"documents",
+								"upload",
+								"{{category_id}}"
+							]
 						},
-						"description": "Upload PDF documents to a category for permanent storage and processing.\n\n**Path Params:**\n- `category_id`: Target category ID\n\n**Form Data:**\n- `files`: One or more PDF files (max 50)\n\n**Response:** Array of `DocumentUploadResponse` with `document_id`, `batch_id`, `filename`, `status`.\n\n**Important:** After upload, use the `batch_id` to track processing progress via the Batches endpoints."
+						"description": "Upload PDF documents to a category for processing.\n\n**Path:** `category_id`\n**Form Data:** `files` — one or more PDF files (max 50)\n\n**Response:** `DocumentUploadResponse[]`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `document_id` | string | Unique document ID |\n| `category_id` | string | Target category |\n| `filename` | string | Original filename |\n| `message` | string | Status message |\n| `status` | enum | `pending` \\| `processing` \\| `completed` \\| `failed` |\n| `batch_id` | string | Batch tracking ID |"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Uploaded",
 							"originalRequest": {
 								"method": "POST",
 								"header": [],
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "files",
-											"type": "file",
-											"src": []
-										}
-									]
-								},
 								"url": {
 									"raw": "{{base_url}}/documents/upload/{{category_id}}",
 									"host": [
@@ -370,6 +501,17 @@
 										"documents",
 										"upload",
 										"{{category_id}}"
+									]
+								},
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "files",
+											"type": "file",
+											"description": "PDF file(s) to upload",
+											"src": []
+										}
 									]
 								}
 							},
@@ -383,29 +525,99 @@
 								}
 							],
 							"cookie": [],
-							"body": "[\n    {\n        \"document_id\": \"doc_123\",\n        \"category_id\": \"cat_123\",\n        \"filename\": \"report.pdf\",\n        \"message\": \"Upload successful\",\n        \"status\": \"pending\",\n        \"batch_id\": \"batch_abc\"\n    }\n]"
+							"body": "[\n    {\n        \"document_id\": \"d0c1a2b3e4f5\",\n        \"category_id\": \"a1b2c3d4e5f6\",\n        \"filename\": \"Well_Report_2024.pdf\",\n        \"message\": \"Document uploaded successfully\",\n        \"status\": \"pending\",\n        \"batch_id\": \"b1a2t3c4h5\"\n    }\n]"
+						},
+						{
+							"name": "400 — Too Many Files",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/documents/upload/{{category_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"documents",
+										"upload",
+										"{{category_id}}"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Maximum 50 files allowed per batch\"\n}"
+						},
+						{
+							"name": "400 — No Valid PDFs",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/documents/upload/{{category_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"documents",
+										"upload",
+										"{{category_id}}"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"No valid PDF files found in batch\"\n}"
+						},
+						{
+							"name": "404 — Category Not Found",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/documents/upload/bad_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"documents",
+										"upload",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Category not found\"\n}"
 						}
 					]
 				},
 				{
 					"name": "Upload Documents (Daily / Temporary)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"if (pm.response.code === 200) {",
-									"    const json = pm.response.json();",
-									"    if (json.length > 0) {",
-									"        pm.environment.set('document_id', json[0].document_id);",
-									"        pm.environment.set('batch_id', json[0].batch_id);",
-									"    }",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
 					"request": {
 						"method": "POST",
 						"body": {
@@ -414,34 +626,31 @@
 								{
 									"key": "files",
 									"type": "file",
-									"description": "PDF file(s) to upload temporarily.",
+									"description": "PDF file(s) to upload",
 									"src": []
 								}
 							]
 						},
 						"url": {
 							"raw": "{{base_url}}/documents/upload/daily/{{category_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["documents", "upload", "daily", "{{category_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"documents",
+								"upload",
+								"daily",
+								"{{category_id}}"
+							]
 						},
-						"description": "Upload temporary documents that auto-delete after 24 hours.\n\nSame interface as permanent upload, but documents are marked as `is_daily=true`."
+						"description": "Upload temporary documents that auto-delete after 24 hours.\n\nSame interface as permanent upload but documents are marked `is_daily=true`."
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Uploaded",
 							"originalRequest": {
 								"method": "POST",
 								"header": [],
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "files",
-											"type": "file",
-											"src": []
-										}
-									]
-								},
 								"url": {
 									"raw": "{{base_url}}/documents/upload/daily/{{category_id}}",
 									"host": [
@@ -465,7 +674,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "[\n    {\n        \"document_id\": \"doc_daily_123\",\n        \"category_id\": \"cat_123\",\n        \"filename\": \"temp_notes.pdf\",\n        \"message\": \"Upload successful\",\n        \"status\": \"pending\",\n        \"batch_id\": \"batch_xyz\"\n    }\n]"
+							"body": "[\n    {\n        \"document_id\": \"d_daily_001\",\n        \"category_id\": \"a1b2c3d4e5f6\",\n        \"filename\": \"temp_notes.pdf\",\n        \"message\": \"Document uploaded successfully\",\n        \"status\": \"pending\",\n        \"batch_id\": \"b_daily_01\"\n    }\n]"
 						}
 					]
 				},
@@ -476,13 +685,9 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test('Returns array', () => {",
-									"    pm.expect(pm.response.json()).to.be.an('array');",
-									"});",
+									"pm.test('Returns array', () => pm.expect(pm.response.json()).to.be.an('array'));",
 									"const docs = pm.response.json();",
-									"if (docs.length > 0) {",
-									"    pm.environment.set('document_id', docs[0].document_id);",
-									"}"
+									"if (docs.length > 0) pm.environment.set('document_id', docs[0].document_id);"
 								],
 								"type": "text/javascript"
 							}
@@ -492,8 +697,12 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/documents?category_id={{category_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["documents"],
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"documents"
+							],
 							"query": [
 								{
 									"key": "category_id",
@@ -502,27 +711,21 @@
 								}
 							]
 						},
-						"description": "List all documents, optionally filtered by category.\n\n**Query Params:**\n- `category_id` (optional): Filter documents by category\n\n**Response:** Array of `DocumentMetadata` objects."
+						"description": "List all documents, optionally filtered by category.\n\n**Query:** `category_id` (optional)\n\n**Response:** `DocumentMetadata[]`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `document_id` | string | Unique ID |\n| `category_id` | string | Category |\n| `filename` | string | Original filename |\n| `file_path` | string | Server path |\n| `file_size` | int | Bytes |\n| `page_count` | int | Number of pages |\n| `upload_date` | datetime | Upload timestamp |\n| `status` | enum | `pending`\\|`processing`\\|`completed`\\|`failed` |\n| `batch_id` | string? | Batch ID |\n| `is_daily` | bool | Auto-deletes after 24h |\n| `toc` | TOCEntry[] | Table of contents |\n| `processing_errors` | string[] | Error messages |"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/documents?category_id={{category_id}}",
+									"raw": "{{base_url}}/documents",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"documents"
-									],
-									"query": [
-										{
-											"key": "category_id",
-											"value": "{{category_id}}"
-										}
 									]
 								}
 							},
@@ -536,7 +739,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "[\n    {\n        \"document_id\": \"doc_123\",\n        \"category_id\": \"cat_123\",\n        \"filename\": \"report.pdf\",\n        \"status\": \"completed\",\n        \"upload_date\": \"2024-03-15T10:00:00\",\n        \"batch_id\": \"batch_abc\",\n        \"file_size\": 102400,\n        \"content_type\": \"application/pdf\"\n    }\n]"
+							"body": "[\n    {\n        \"document_id\": \"d0c1a2b3e4f5\",\n        \"category_id\": \"a1b2c3d4e5f6\",\n        \"filename\": \"Well_Report_2024.pdf\",\n        \"file_path\": \"/data/uploads/Drilling Reports/abc_Well_Report_2024.pdf\",\n        \"file_size\": 2048576,\n        \"page_count\": 45,\n        \"upload_date\": \"2024-06-15T09:00:00\",\n        \"status\": \"completed\",\n        \"batch_id\": \"b1a2t3c4h5\",\n        \"is_daily\": false,\n        \"toc\": [\n            {\n                \"title\": \"Executive Summary\",\n                \"level\": 1,\n                \"page_number\": 1,\n                \"page_end\": 3\n            },\n            {\n                \"title\": \"Drilling Operations\",\n                \"level\": 1,\n                \"page_number\": 4,\n                \"page_end\": 20\n            }\n        ],\n        \"processing_errors\": []\n    }\n]"
 						}
 					]
 				},
@@ -546,14 +749,19 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/documents/{{document_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["documents", "{{document_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"documents",
+								"{{document_id}}"
+							]
 						},
-						"description": "Get metadata for a single document.\n\n**Response:** `DocumentMetadata` with `document_id`, `category_id`, `filename`, `status`, `upload_date`, `batch_id`, `is_daily`, `error_message`."
+						"description": "Get metadata for a single document.\n\n**Response:** `DocumentMetadata`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
@@ -578,7 +786,35 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"document_id\": \"doc_123\",\n    \"category_id\": \"cat_123\",\n    \"filename\": \"report.pdf\",\n    \"status\": \"completed\",\n    \"upload_date\": \"2024-03-15T10:00:00\",\n    \"batch_id\": \"batch_abc\",\n    \"file_size\": 102400,\n    \"content_type\": \"application/pdf\"\n}"
+							"body": "{\n    \"document_id\": \"d0c1a2b3e4f5\",\n    \"category_id\": \"a1b2c3d4e5f6\",\n    \"filename\": \"Well_Report_2024.pdf\",\n    \"file_path\": \"/data/uploads/Drilling Reports/abc_Well_Report_2024.pdf\",\n    \"file_size\": 2048576,\n    \"page_count\": 45,\n    \"upload_date\": \"2024-06-15T09:00:00\",\n    \"status\": \"completed\",\n    \"batch_id\": \"b1a2t3c4h5\",\n    \"is_daily\": false,\n    \"toc\": [\n        {\n            \"title\": \"Executive Summary\",\n            \"level\": 1,\n            \"page_number\": 1,\n            \"page_end\": 3\n        },\n        {\n            \"title\": \"Drilling Operations\",\n            \"level\": 1,\n            \"page_number\": 4,\n            \"page_end\": 20\n        }\n    ],\n    \"processing_errors\": []\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/documents/bad_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"documents",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Document not found\"\n}"
 						}
 					]
 				},
@@ -588,14 +824,20 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/documents/{{document_id}}/download",
-							"host": ["{{base_url}}"],
-							"path": ["documents", "{{document_id}}", "download"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"documents",
+								"{{document_id}}",
+								"download"
+							]
 						},
-						"description": "Download the original PDF file.\n\n**Response:** Binary PDF file with `Content-Disposition: attachment` header."
+						"description": "Download the original PDF file.\n\n**Response:** Binary PDF with `Content-Disposition: attachment`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — File",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
@@ -618,31 +860,61 @@
 								{
 									"key": "Content-Type",
 									"value": "application/pdf"
-								},
-								{
-									"key": "Content-Disposition",
-									"value": "attachment; filename=\"report.pdf\""
 								}
 							],
 							"cookie": [],
 							"body": "[Binary PDF Data]"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/documents/bad_id/download",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"documents",
+										"bad_id",
+										"download"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Document not found\"\n}"
 						}
 					]
 				},
 				{
-					"name": "Delete Document",
+					"name": "Delete Document (Soft)",
 					"request": {
 						"method": "DELETE",
 						"url": {
 							"raw": "{{base_url}}/documents/{{document_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["documents", "{{document_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"documents",
+								"{{document_id}}"
+							]
 						},
-						"description": "Soft delete a document (metadata remains)."
+						"description": "Soft-delete a document.\n\n**Response:** `{message}`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Deleted",
 							"originalRequest": {
 								"method": "DELETE",
 								"header": [],
@@ -667,7 +939,35 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"status\": \"success\",\n    \"message\": \"Document soft deleted\"\n}"
+							"body": "{\n    \"message\": \"Document d0c1a2b3e4f5 deleted\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/documents/bad_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"documents",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Document not found\"\n}"
 						}
 					]
 				},
@@ -677,14 +977,20 @@
 						"method": "DELETE",
 						"url": {
 							"raw": "{{base_url}}/documents/{{document_id}}/burn",
-							"host": ["{{base_url}}"],
-							"path": ["documents", "{{document_id}}", "burn"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"documents",
+								"{{document_id}}",
+								"burn"
+							]
 						},
-						"description": "**Permanently** remove a document and ALL related data:\n- MongoDB metadata\n- Qdrant vectors (text + image embeddings)\n- Physical file on disk\n\n⚠️ This action is irreversible."
+						"description": "**Permanently** remove a document and ALL related data (MongoDB, Qdrant vectors, disk files).\n\n⚠️ Irreversible.\n\n**Response:** `{message}`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Burned",
 							"originalRequest": {
 								"method": "DELETE",
 								"header": [],
@@ -710,7 +1016,36 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"status\": \"success\",\n    \"message\": \"Document permanently burned\"\n}"
+							"body": "{\n    \"message\": \"Document d0c1a2b3e4f5 burned successfully\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/documents/bad_id/burn",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"documents",
+										"bad_id",
+										"burn"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Document not found\"\n}"
 						}
 					]
 				},
@@ -720,14 +1055,20 @@
 						"method": "DELETE",
 						"url": {
 							"raw": "{{base_url}}/documents/cleanup/daily",
-							"host": ["{{base_url}}"],
-							"path": ["documents", "cleanup", "daily"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"documents",
+								"cleanup",
+								"daily"
+							]
 						},
-						"description": "Remove all daily (temporary) documents that have expired (older than 24 hours).\n\nCleans MongoDB, Qdrant, and disk."
+						"description": "Remove all daily documents older than 24 hours.\n\n**Response:** Cleanup result"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Cleaned",
 							"originalRequest": {
 								"method": "DELETE",
 								"header": [],
@@ -753,7 +1094,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"status\": \"success\",\n    \"message\": \"Daily cleanup completed\",\n    \"deleted_count\": 5\n}"
+							"body": "{\n    \"deleted_count\": 3,\n    \"message\": \"Daily cleanup completed\"\n}"
 						}
 					]
 				}
@@ -761,7 +1102,7 @@
 		},
 		{
 			"name": "Batches",
-			"description": "Track and manage document processing batches. Every upload creates a batch.",
+			"description": "Track and manage document processing batches.",
 			"item": [
 				{
 					"name": "Get Batch Status (Snapshot)",
@@ -769,14 +1110,19 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/batches/{{batch_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["batches", "{{batch_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"batches",
+								"{{batch_id}}"
+							]
 						},
-						"description": "Get a one-time snapshot of a batch's current status.\n\n**Response:**\n```json\n{\n  \"batch_id\": \"abc123\",\n  \"files\": {\n    \"report.pdf\": {\n      \"status\": \"chunking\",\n      \"detail\": \"Processing page 5/20\"\n    }\n  },\n  \"timestamp\": \"2024-01-01T00:00:00\"\n}\n```"
+						"description": "One-time snapshot of batch processing status.\n\n**Response:**\n| Field | Type | Description |\n|-------|------|-------------|\n| `batch_id` | string | Batch ID |\n| `files` | object | Map of filename → {status, detail} |\n| `timestamp` | datetime | Current time |"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
@@ -801,7 +1147,35 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"batch_id\": \"batch_abc\",\n    \"files\": {\n        \"report.pdf\": {\n            \"status\": \"chunking\",\n            \"detail\": \"Processing page 5/20\"\n        }\n    },\n    \"timestamp\": \"2024-03-15T10:05:00\"\n}"
+							"body": "{\n    \"batch_id\": \"b1a2t3c4h5\",\n    \"files\": {\n        \"Well_Report_2024.pdf\": {\n            \"status\": \"embedding\",\n            \"detail\": \"Generating vectors for page 12/45\"\n        },\n        \"Safety_Manual.pdf\": {\n            \"status\": \"completed\",\n            \"detail\": \"Done\"\n        }\n    },\n    \"timestamp\": \"2024-06-15T09:05:00\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/batches/bad_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"batches",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Batch not found\"\n}"
 						}
 					]
 				},
@@ -811,14 +1185,20 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/batches/{{batch_id}}/progress",
-							"host": ["{{base_url}}"],
-							"path": ["batches", "{{batch_id}}", "progress"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"batches",
+								"{{batch_id}}",
+								"progress"
+							]
 						},
-						"description": "**Server-Sent Events (SSE)** stream for real-time processing progress.\n\n**Note:** This is a streaming endpoint. In Postman, you'll see the response as it arrives. In code, use `EventSource`:\n\n```javascript\nconst evtSource = new EventSource('/api/batches/{batch_id}/progress');\nevtSource.onmessage = (event) => {\n    const data = JSON.parse(event.data);\n    console.log(data.filename, data.status, data.detail);\n};\n```\n\n**Event Format:**\n```\ndata: {\"filename\": \"report.pdf\", \"status\": \"embedding\", \"detail\": \"Generating vectors\"}\n```"
+						"description": "**Server-Sent Events** stream for real-time progress.\n\n**Event format:**\n```\ndata: {\"filename\": \"report.pdf\", \"status\": \"embedding\", \"detail\": \"Page 5/20\"}\n```\n\n**Frontend:**\n```javascript\nconst evtSource = new EventSource('/api/batches/{batch_id}/progress');\nevtSource.onmessage = (e) => console.log(JSON.parse(e.data));\n```"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — SSE Stream",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
@@ -844,7 +1224,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "data: {\"filename\": \"report.pdf\", \"status\": \"embedding\", \"detail\": \"Generating vectors\"}\n\ndata: {\"filename\": \"report.pdf\", \"status\": \"completed\", \"detail\": \"Done\"}\n\n"
+							"body": "data: {\"filename\": \"report.pdf\", \"status\": \"chunking\", \"detail\": \"Processing page 5/20\"}\n\ndata: {\"filename\": \"report.pdf\", \"status\": \"embedding\", \"detail\": \"Generating vectors\"}\n\ndata: {\"filename\": \"report.pdf\", \"status\": \"completed\", \"detail\": \"Done\"}\n\n"
 						}
 					]
 				},
@@ -854,14 +1234,20 @@
 						"method": "POST",
 						"url": {
 							"raw": "{{base_url}}/batches/{{batch_id}}/terminate",
-							"host": ["{{base_url}}"],
-							"path": ["batches", "{{batch_id}}", "terminate"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"batches",
+								"{{batch_id}}",
+								"terminate"
+							]
 						},
-						"description": "Terminate a batch upload in progress.\n\n- **Completed** documents are kept\n- **Incomplete** documents are deleted\n\n**Response:**\n```json\n{\n  \"batch_id\": \"abc123\",\n  \"total_documents\": 5,\n  \"kept_completed\": 3,\n  \"deleted_incomplete\": 2\n}\n```"
+						"description": "Terminate a batch. Completed docs are kept, incomplete ones deleted.\n\n**Response:**\n| Field | Type | Description |\n|-------|------|-------------|\n| `batch_id` | string | Batch ID |\n| `total_documents` | int | Total in batch |\n| `kept_completed` | int | Completed & kept |\n| `deleted_incomplete` | int | Removed |"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Terminated",
 							"originalRequest": {
 								"method": "POST",
 								"header": [],
@@ -887,7 +1273,36 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"batch_id\": \"batch_abc\",\n    \"total_documents\": 5,\n    \"kept_completed\": 3,\n    \"deleted_incomplete\": 2\n}"
+							"body": "{\n    \"batch_id\": \"b1a2t3c4h5\",\n    \"total_documents\": 5,\n    \"kept_completed\": 3,\n    \"deleted_incomplete\": 2\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/batches/bad_id/terminate",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"batches",
+										"bad_id",
+										"terminate"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Batch not found\"\n}"
 						}
 					]
 				}
@@ -895,7 +1310,7 @@
 		},
 		{
 			"name": "Chat",
-			"description": "Conversational AI interface with document-grounded responses.",
+			"description": "Conversational AI with document-grounded responses.",
 			"item": [
 				{
 					"name": "Send Message",
@@ -907,11 +1322,6 @@
 									"if (pm.response.code === 200) {",
 									"    const json = pm.response.json();",
 									"    pm.environment.set('chat_id', json.chat_id);",
-									"    pm.test('Chat response has answer', () => {",
-									"        pm.expect(json).to.have.property('chat_id');",
-									"        pm.expect(json).to.have.property('answer');",
-									"        pm.expect(json).to.have.property('sources');",
-									"    });",
 									"}"
 								],
 								"type": "text/javascript"
@@ -925,33 +1335,33 @@
 							"formdata": [
 								{
 									"key": "message",
-									"value": "What are the key findings in the uploaded reports?",
+									"value": "What is the total depth of the well?",
 									"type": "text",
-									"description": "Required. The user's question."
+									"description": "Required. User's question."
 								},
 								{
 									"key": "chat_id",
 									"value": "",
 									"type": "text",
-									"description": "Optional. Existing chat session ID for continuity.",
+									"description": "Optional. Existing chat session ID.",
 									"disabled": true
 								},
 								{
 									"key": "category_ids",
 									"value": "[\"{{category_id}}\"]",
 									"type": "text",
-									"description": "Optional. JSON array of category IDs to search within."
+									"description": "Optional. JSON array of category IDs."
 								},
 								{
 									"key": "top_k",
 									"value": "5",
 									"type": "text",
-									"description": "Number of context chunks to retrieve (1-20, default 5)."
+									"description": "Chunks to retrieve (1-20, default 5)."
 								},
 								{
 									"key": "images",
 									"type": "file",
-									"description": "Optional. Image files for multimodal queries (max 10).",
+									"description": "Optional. Image files (max 10).",
 									"src": [],
 									"disabled": true
 								}
@@ -959,27 +1369,21 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/chat",
-							"host": ["{{base_url}}"],
-							"path": ["chat"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"chat"
+							]
 						},
-						"description": "Send a message to the AI chat. Uses `multipart/form-data` to support optional image uploads.\n\n**Form Fields:**\n- `message` (string, required): User's question\n- `chat_id` (string, optional): Continue existing conversation\n- `category_ids` (JSON string, optional): Restrict search to specific categories\n- `top_k` (int, optional): Number of context chunks (default: 5)\n- `images` (file[], optional): Image attachments for visual queries\n\n**Response:**\n```json\n{\n  \"chat_id\": \"abc123\",\n  \"message_id\": \"msg_456\",\n  \"answer\": \"Based on the reports [report.pdf, Page 3-4]...\",\n  \"sources\": {\n    \"doc_id\": { \"filename\": \"report.pdf\", \"pages\": [1, 3, 5] }\n  },\n  \"inline_citations\": [\n    { \"source_number\": 1, \"document_id\": \"doc_abc\", \"filename\": \"report.pdf\", \"pages\": [3, 4] }\n  ],\n  \"image_results\": []\n}\n```\n\n**Frontend Integration Notes:**\n- First message creates a new chat session → save the returned `chat_id`\n- Subsequent messages should include `chat_id` for conversation continuity\n- `category_ids` should be a JSON-stringified array: `'[\"id1\", \"id2\"]'`"
+						"description": "Send a message (multipart/form-data for image support).\n\n**Form Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `message` | string | ✅ | User's question |\n| `chat_id` | string | ❌ | Continue existing chat |\n| `category_ids` | JSON string | ❌ | `'[\"id1\",\"id2\"]'` |\n| `top_k` | int | ❌ | Chunks (default 5) |\n| `images` | file[] | ❌ | Image attachments |\n\n**Response:** `ChatResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID (save this!) |\n| `message_id` | string | Message ID |\n| `answer` | string | AI response with inline citations |\n| `sources` | dict | `{doc_id: {filename, pages[]}}` |\n| `inline_citations` | InlineCitation[] | `[{source_number, document_id, filename, section_title, pages[]}]` |\n| `image_results` | ImageSearchResult[] | Retrieved images |"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "POST",
 								"header": [],
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "message",
-											"value": "What are the key findings?",
-											"type": "text"
-										}
-									]
-								},
 								"url": {
 									"raw": "{{base_url}}/chat",
 									"host": [
@@ -987,6 +1391,43 @@
 									],
 									"path": [
 										"chat"
+									]
+								},
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "message",
+											"value": "What is the total depth of the well?",
+											"type": "text",
+											"description": "Required. User's question."
+										},
+										{
+											"key": "chat_id",
+											"value": "",
+											"type": "text",
+											"description": "Optional. Existing chat session ID.",
+											"disabled": true
+										},
+										{
+											"key": "category_ids",
+											"value": "[\"{{category_id}}\"]",
+											"type": "text",
+											"description": "Optional. JSON array of category IDs."
+										},
+										{
+											"key": "top_k",
+											"value": "5",
+											"type": "text",
+											"description": "Chunks to retrieve (1-20, default 5)."
+										},
+										{
+											"key": "images",
+											"type": "file",
+											"description": "Optional. Image files (max 10).",
+											"src": [],
+											"disabled": true
+										}
 									]
 								}
 							},
@@ -1000,7 +1441,34 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"chat_id\": \"98765432-abcd-efgh-ijkl-1234567890ab\",\n    \"message_id\": \"msg_12345678\",\n    \"answer\": \"Based on the analysis of field reports [Source 1, Page 5], production increased by 15% in Q3. The new drilling methodology [Source 2, Page 12] contributed significantly to this growth.\",\n    \"sources\": {\n        \"doc_123\": {\n            \"filename\": \"Quarterly_Report_Q3_2024.pdf\",\n            \"pages\": [5, 6]\n        },\n        \"doc_456\": {\n             \"filename\": \"Drilling_Methodology_v2.pdf\",\n             \"pages\": [12]\n        }\n    },\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"doc_123\",\n            \"filename\": \"Quarterly_Report_Q3_2024.pdf\",\n            \"section_title\": \"Production Overview\",\n            \"pages\": [5]\n        },\n        {\n            \"source_number\": 2,\n            \"document_id\": \"doc_456\",\n            \"filename\": \"Drilling_Methodology_v2.pdf\",\n            \"section_title\": \"New Techniques\",\n            \"pages\": [12]\n        }\n    ],\n    \"image_results\": [\n        {\n            \"image_id\": \"img_789\",\n            \"document_id\": \"doc_123\",\n            \"page_number\": 6,\n            \"section_title\": \"Production Chart\",\n            \"caption\": \"Figure 3.1: Monthly Output\",\n            \"analysis\": \"The chart shows a steady upward trend in monthly output, peaking in September.\",\n            \"image_path\": \"/static/images/doc_123/img_789.png\",\n            \"score\": 0.85\n        }\n    ]\n}"
+							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"message_id\": \"msg_a1b2c3d4\",\n    \"answer\": \"Based on the drilling report [Source 1, Page 12], the well reached a total depth of 15,000 ft. The formation analysis [Source 2, Page 8] indicates high porosity in the target zone.\",\n    \"sources\": {\n        \"d0c1a2b3e4f5\": {\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"pages\": [\n                12,\n                13\n            ]\n        },\n        \"d0c1a2b3e4f6\": {\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"pages\": [\n                8\n            ]\n        }\n    },\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"section_title\": \"Drilling Summary\",\n            \"pages\": [\n                12\n            ]\n        },\n        {\n            \"source_number\": 2,\n            \"document_id\": \"d0c1a2b3e4f6\",\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"section_title\": \"Porosity Analysis\",\n            \"pages\": [\n                8\n            ]\n        }\n    ],\n    \"image_results\": [\n        {\n            \"image_id\": \"img_001\",\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"page_number\": 13,\n            \"section_title\": \"Well Diagram\",\n            \"caption\": \"Figure 4.1: Well Profile\",\n            \"image_path\": \"/static/images/d0c1a2b3e4f5/img_001.png\",\n            \"score\": 0.88\n        }\n    ]\n}"
+						},
+						{
+							"name": "422 — Missing Message",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/chat",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"chat"
+									]
+								}
+							},
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": [\n        {\n            \"loc\": [\n                \"body\",\n                \"message\"\n            ],\n            \"msg\": \"field required\",\n            \"type\": \"value_error.missing\"\n        }\n    ]\n}"
 						}
 					]
 				},
@@ -1030,27 +1498,22 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/chat/stream",
-							"host": ["{{base_url}}"],
-							"path": ["chat", "stream"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"chat",
+								"stream"
+							]
 						},
-						"description": "**Server-Sent Events (SSE)** streaming version of the chat endpoint.\n\nReturns word-by-word tokens as they are generated, then a final metadata event.\n\n**Same form fields as Send Message.**\n\n**Event Format:**\n```\ndata: {\"token\": \"Based\"}\ndata: {\"token\": \" on\"}\ndata: {\"token\": \" the\"}\n...\ndata: {\"done\": true, \"chat_id\": \"abc123\", \"answer\": \"...\", \"sources\": {...}, \"inline_citations\": [...]}\n```\n\n**Frontend Usage:**\n```javascript\nconst reader = response.body.getReader();\n// Read and parse each SSE event for real-time display\n```"
+						"description": "**SSE streaming** chat. Returns word-by-word tokens then final metadata.\n\n**Same form fields as Send Message.**\n\n**Event format:**\n```\ndata: {\"token\": \"Based\"}\ndata: {\"token\": \" on\"}\n...\ndata: {\"done\": true, \"chat_id\": \"...\", \"message_id\": \"...\", \"answer\": \"...\", \"sources\": {...}, \"inline_citations\": [...], \"image_results\": [...]}\n```\n\n**Frontend:**\n```javascript\nconst response = await fetch('/api/chat/stream', {method: 'POST', body: formData});\nconst reader = response.body.getReader();\n// Read and parse each SSE line\n```"
 					},
 					"response": [
 						{
-							"name": "Streaming Example",
+							"name": "200 — SSE Stream",
 							"originalRequest": {
 								"method": "POST",
 								"header": [],
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "message",
-											"value": "Summarize",
-											"type": "text"
-										}
-									]
-								},
 								"url": {
 									"raw": "{{base_url}}/chat/stream",
 									"host": [
@@ -1072,7 +1535,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "data: {\"token\": \"Based\"}\n\ndata: {\"token\": \" on\"}\n\ndata: {\"token\": \" the\"}\n\ndata: {\"token\": \" reports\"}\n\ndata: {\"done\": true, \"chat_id\": \"98765432-abcd\", \"message_id\": \"msg_123\", \"answer\": \"Based on the reports...\", \"sources\": {\"doc_1\": {\"filename\": \"report.pdf\"}}, \"inline_citations\": [], \"image_results\": []}\n\n"
+							"body": "data: {\"token\": \"Based\"}\n\ndata: {\"token\": \" on\"}\n\ndata: {\"token\": \" the\"}\n\ndata: {\"token\": \" drilling\"}\n\ndata: {\"token\": \" report\"}\n\ndata: {\"done\": true, \"chat_id\": \"c1h2a3t4-abcd\", \"message_id\": \"msg_a1b2\", \"answer\": \"Based on the drilling report...\", \"sources\": {\"d0c1\": {\"filename\": \"report.pdf\", \"pages\": [12]}}, \"inline_citations\": [{\"source_number\": 1, \"document_id\": \"d0c1\", \"filename\": \"report.pdf\", \"section_title\": \"Summary\", \"pages\": [12]}], \"image_results\": []}\n\n"
 						}
 					]
 				},
@@ -1083,13 +1546,9 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test('Returns array', () => {",
-									"    pm.expect(pm.response.json()).to.be.an('array');",
-									"});",
+									"pm.test('Returns array', () => pm.expect(pm.response.json()).to.be.an('array'));",
 									"const chats = pm.response.json();",
-									"if (chats.length > 0) {",
-									"    pm.environment.set('chat_id', chats[0].chat_id);",
-									"}"
+									"if (chats.length > 0) pm.environment.set('chat_id', chats[0].chat_id);"
 								],
 								"type": "text/javascript"
 							}
@@ -1099,21 +1558,25 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/chat?limit=50",
-							"host": ["{{base_url}}"],
-							"path": ["chat"],
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"chat"
+							],
 							"query": [
 								{
 									"key": "limit",
 									"value": "50",
-									"description": "Maximum number of sessions to return (default 50)"
+									"description": "Max sessions (default 50)"
 								}
 							]
 						},
-						"description": "List all chat sessions.\n\n**Response:** Array of `ChatSession` objects with `chat_id`, `title`, `created_at`, `messages`."
+						"description": "List all chat sessions.\n\n**Response:** `ChatSession[]`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID |\n| `category_ids` | string[]? | Linked categories |\n| `messages` | ChatMessage[] | All messages |\n| `created_at` | datetime | Created |\n| `updated_at` | datetime | Last activity |"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
@@ -1124,12 +1587,6 @@
 									],
 									"path": [
 										"chat"
-									],
-									"query": [
-										{
-											"key": "limit",
-											"value": "50"
-										}
 									]
 								}
 							},
@@ -1143,7 +1600,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "[\n    {\n        \"chat_id\": \"chat_abc\",\n        \"title\": \"Analysis of Q3 Reports\",\n        \"created_at\": \"2024-03-15T10:00:00\",\n        \"messages\": [\n            {\n                \"role\": \"user\",\n                \"content\": \"Analyze Q3\",\n                \"timestamp\": \"2024-03-15T10:00:01\"\n            }\n        ]\n    }\n]"
+							"body": "[\n    {\n        \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n        \"category_ids\": [\n            \"a1b2c3d4e5f6\"\n        ],\n        \"messages\": [\n            {\n                \"message_id\": \"msg_u001\",\n                \"role\": \"user\",\n                \"content\": \"What is the total depth?\",\n                \"image_paths\": [],\n                \"sources\": null,\n                \"timestamp\": \"2024-06-15T10:00:00\"\n            },\n            {\n                \"message_id\": \"msg_a001\",\n                \"role\": \"assistant\",\n                \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n                \"image_paths\": [],\n                \"sources\": {\n                    \"d0c1a2b3e4f5\": {\n                        \"filename\": \"Well_Report_2024.pdf\",\n                        \"pages\": [\n                            12\n                        ]\n                    }\n                },\n                \"timestamp\": \"2024-06-15T10:00:05\"\n            }\n        ],\n        \"created_at\": \"2024-06-15T10:00:00\",\n        \"updated_at\": \"2024-06-15T10:00:05\"\n    }\n]"
 						}
 					]
 				},
@@ -1153,14 +1610,19 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{base_url}}/chat/{{chat_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["chat", "{{chat_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"chat",
+								"{{chat_id}}"
+							]
 						},
-						"description": "Get full chat session with all messages.\n\n**Response:** `ChatSession` with `messages[]` array containing `role`, `content`, `timestamp`, `sources`, `image_paths`."
+						"description": "Get full chat session with all messages.\n\n**Response:** `ChatSession`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
@@ -1185,7 +1647,35 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"chat_id\": \"chat_abc\",\n    \"title\": \"Analysis of Q3 Reports\",\n    \"created_at\": \"2024-03-15T10:00:00\",\n    \"messages\": [\n        {\n            \"role\": \"user\",\n            \"content\": \"Analyze Q3\",\n            \"timestamp\": \"2024-03-15T10:00:01\"\n        },\n        {\n            \"role\": \"assistant\",\n            \"content\": \"Here is the analysis...\",\n            \"timestamp\": \"2024-03-15T10:00:05\",\n            \"sources\": {},\n            \"image_paths\": []\n        }\n    ]\n}"
+							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"category_ids\": [\n        \"a1b2c3d4e5f6\"\n    ],\n    \"messages\": [\n        {\n            \"message_id\": \"msg_u001\",\n            \"role\": \"user\",\n            \"content\": \"What is the total depth?\",\n            \"image_paths\": [],\n            \"sources\": null,\n            \"timestamp\": \"2024-06-15T10:00:00\"\n        },\n        {\n            \"message_id\": \"msg_a001\",\n            \"role\": \"assistant\",\n            \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n            \"image_paths\": [],\n            \"sources\": {\n                \"d0c1a2b3e4f5\": {\n                    \"filename\": \"Well_Report_2024.pdf\",\n                    \"pages\": [\n                        12\n                    ]\n                }\n            },\n            \"timestamp\": \"2024-06-15T10:00:05\"\n        }\n    ],\n    \"created_at\": \"2024-06-15T10:00:00\",\n    \"updated_at\": \"2024-06-15T10:00:05\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/chat/bad_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"chat",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Chat not found\"\n}"
 						}
 					]
 				},
@@ -1195,14 +1685,19 @@
 						"method": "DELETE",
 						"url": {
 							"raw": "{{base_url}}/chat/{{chat_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["chat", "{{chat_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"chat",
+								"{{chat_id}}"
+							]
 						},
-						"description": "Delete a chat session and all its messages."
+						"description": "Delete a chat session and all messages.\n\n**Response:** `{message}`"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Deleted",
 							"originalRequest": {
 								"method": "DELETE",
 								"header": [],
@@ -1227,7 +1722,35 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"status\": \"success\",\n    \"message\": \"Chat session deleted\"\n}"
+							"body": "{\n    \"message\": \"Chat c1h2a3t4-abcd-efgh-ijkl-567890 deleted\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/chat/bad_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"chat",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Chat not found\"\n}"
 						}
 					]
 				}
@@ -1235,7 +1758,7 @@
 		},
 		{
 			"name": "Query",
-			"description": "Direct RAG query and image search (without chat session management).",
+			"description": "Direct RAG query and image search (no chat history).",
 			"item": [
 				{
 					"name": "RAG Query",
@@ -1249,18 +1772,22 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"category_ids\": [\"{{category_id}}\"],\n    \"top_k\": 5,\n    \"include_images\": true,\n    \"include_tables\": true\n}"
+							"raw": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ],\n    \"top_k\": 5,\n    \"include_images\": true,\n    \"include_tables\": true\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/query",
-							"host": ["{{base_url}}"],
-							"path": ["query"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"query"
+							]
 						},
-						"description": "Perform a one-shot RAG query (no chat history).\n\n**Request Body:**\n- `query` (string, required): Question text\n- `category_ids` (string[], optional): Filter by categories\n- `document_ids` (string[], optional): Filter by specific documents\n- `top_k` (int, 1-20, default 5): Number of chunks\n- `include_images` (bool, default true): Include related images\n- `include_tables` (bool, default true): Include related tables\n\n**Response:**\n```json\n{\n  \"query\": \"...\",\n  \"answer\": \"...\",\n  \"retrieved_chunks\": [...],\n  \"sources\": [\"doc1.pdf\", \"doc2.pdf\"],\n  \"inline_citations\": [\n    { \"source_number\": 1, \"document_id\": \"doc_abc\", \"filename\": \"report.pdf\", \"pages\": [3, 4] }\n  ]\n}\n```"
+						"description": "One-shot RAG query.\n\n**Request Body (JSON):**\n| Field | Type | Required | Default |\n|-------|------|----------|---------|\n| `query` | string | ✅ | — |\n| `category_ids` | string[] | ❌ | all |\n| `document_ids` | string[] | ❌ | all |\n| `top_k` | int (1-20) | ❌ | 5 |\n| `include_images` | bool | ❌ | true |\n| `include_tables` | bool | ❌ | true |\n\n**Response:** `QueryResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query` | string | Original query |\n| `answer` | string | AI answer |\n| `retrieved_chunks` | RetrievedChunk[] | Context chunks |\n| `sources` | string[] | Document IDs used |\n| `inline_citations` | dict[] | Structured citations |"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "POST",
 								"header": [
@@ -1269,10 +1796,6 @@
 										"value": "application/json"
 									}
 								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ],\n    \"top_k\": 5,\n    \"include_images\": true,\n    \"include_tables\": true\n}"
-								},
 								"url": {
 									"raw": "{{base_url}}/query",
 									"host": [
@@ -1281,6 +1804,10 @@
 									"path": [
 										"query"
 									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"query\": \"What are the production statistics for Q3?\", \"top_k\": 5}"
 								}
 							},
 							"status": "OK",
@@ -1293,7 +1820,43 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"answer\": \"Detailed production statistics indicate a 15% increase...\",\n    \"retrieved_chunks\": [\n        {\n            \"chunk_id\": \"doc_123_chunk_4\",\n            \"content\": \"...text content...\",\n            \"score\": 0.95,\n            \"section_title\": \"Q3 Stats\",\n            \"page_start\": 5,\n            \"page_end\": 5,\n            \"images\": [],\n            \"tables\": []\n        }\n    ],\n    \"sources\": [\n        \"doc_123\"\n    ],\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"doc_123\",\n            \"filename\": \"report.pdf\",\n            \"section_title\": \"Q3 Stats\",\n            \"pages\": [\n                5\n            ]\n        }\n    ]\n}"
+							"body": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"answer\": \"According to the quarterly report [Source 1, Page 5], production increased by 15% in Q3 2024.\",\n    \"retrieved_chunks\": [\n        {\n            \"chunk_id\": \"d0c1_chunk_04\",\n            \"content\": \"Q3 production output reached 45,000 barrels per day...\",\n            \"score\": 0.95,\n            \"section_title\": \"Q3 Production Summary\",\n            \"page_start\": 5,\n            \"page_end\": 6,\n            \"image_ids\": [\n                \"img_001\"\n            ],\n            \"images\": [],\n            \"tables\": []\n        }\n    ],\n    \"sources\": [\n        \"d0c1a2b3e4f5\"\n    ],\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"filename\": \"Quarterly_Report_Q3.pdf\",\n            \"section_title\": \"Q3 Production Summary\",\n            \"pages\": [\n                5\n            ]\n        }\n    ]\n}"
+						},
+						{
+							"name": "422 — Missing Query",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/query",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"query"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"top_k\": 5}"
+								}
+							},
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": [\n        {\n            \"loc\": [\n                \"body\",\n                \"query\"\n            ],\n            \"msg\": \"field required\",\n            \"type\": \"value_error.missing\"\n        }\n    ]\n}"
 						}
 					]
 				},
@@ -1309,18 +1872,23 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"category_ids\": [\"{{category_id}}\"],\n    \"top_k\": 5\n}"
+							"raw": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ],\n    \"top_k\": 5\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/query/image-search",
-							"host": ["{{base_url}}"],
-							"path": ["query", "image-search"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"query",
+								"image-search"
+							]
 						},
-						"description": "Search for images across documents using text or image input.\n\n**Request Body:**\n- `query_text` (string, optional): Text description of desired image\n- `query_image_base64` (string, optional): Base64-encoded image to search by similarity\n- `category_ids` (string[], optional): Filter by categories\n- `document_ids` (string[], optional): Filter by documents\n- `top_k` (int, default 5): Number of results\n\n**Response:**\n```json\n{\n  \"query_text\": \"...\",\n  \"has_query_image\": false,\n  \"results\": [\n    {\n      \"image_id\": \"...\",\n      \"document_id\": \"...\",\n      \"page_number\": 3,\n      \"section_title\": \"Equipment Layout\",\n      \"caption\": \"Figure 1: Production Flow\",\n      \"image_path\": \"/path/to/image.png\",\n      \"score\": 0.92\n    }\n  ],\n  \"count\": 1\n}\n```"
+						"description": "Search for images by text or image similarity.\n\n**Request Body (JSON):**\n| Field | Type | Required |\n|-------|------|----------|\n| `query_text` | string | ❌ (one of text/image required) |\n| `query_image_base64` | string | ❌ |\n| `category_ids` | string[] | ❌ |\n| `document_ids` | string[] | ❌ |\n| `top_k` | int (1-20) | ❌ (default 5) |\n\n**Response:** `ImageSearchResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query_text` | string? | Echo of input |\n| `has_query_image` | bool | Whether image was provided |\n| `results` | ImageSearchResult[] | Matched images |\n| `count` | int | Number of results |"
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "POST",
 								"header": [
@@ -1329,10 +1897,6 @@
 										"value": "application/json"
 									}
 								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ],\n    \"top_k\": 5\n}"
-								},
 								"url": {
 									"raw": "{{base_url}}/query/image-search",
 									"host": [
@@ -1342,6 +1906,10 @@
 										"query",
 										"image-search"
 									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"query_text\": \"production flowchart\", \"top_k\": 5}"
 								}
 							},
 							"status": "OK",
@@ -1354,7 +1922,44 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"has_query_image\": false,\n    \"results\": [\n        {\n            \"image_id\": \"img_789\",\n            \"document_id\": \"doc_123\",\n            \"page_number\": 3,\n            \"section_title\": \"Equipment Layout\",\n            \"caption\": \"Figure 1: Production Flow\",\n            \"analysis\": \"This flowchart demonstrates the process...\",\n            \"image_path\": \"/static/images/doc_123/img_789.png\",\n            \"score\": 0.92\n        }\n    ],\n    \"count\": 1\n}"
+							"body": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"has_query_image\": false,\n    \"results\": [\n        {\n            \"image_id\": \"img_001\",\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"page_number\": 13,\n            \"section_title\": \"Process Flow\",\n            \"caption\": \"Figure 4.1: Production Flowchart\",\n            \"image_path\": \"/static/images/d0c1a2b3e4f5/img_001.png\",\n            \"score\": 0.92\n        }\n    ],\n    \"count\": 1\n}"
+						},
+						{
+							"name": "422 — Empty Request",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/query/image-search",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"query",
+										"image-search"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{}"
+								}
+							},
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Either query_text or query_image_base64 must be provided\"\n}"
 						}
 					]
 				}
@@ -1362,7 +1967,7 @@
 		},
 		{
 			"name": "Client Proxy",
-			"description": "Same endpoints via the Python Client Proxy (port 8001). Uses `{{client_url}}` base URL.",
+			"description": "Same endpoints via the Python Client Proxy (port 8001). Uses `{{client_url}}` base URL.\n\nThe proxy validates DTOs and forwards requests to the main API.",
 			"item": [
 				{
 					"name": "List Categories (via Proxy)",
@@ -1370,14 +1975,18 @@
 						"method": "GET",
 						"url": {
 							"raw": "{{client_url}}/categories",
-							"host": ["{{client_url}}"],
-							"path": ["categories"]
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"categories"
+							]
 						},
-						"description": "Same as Main API but routed through the Python Client Proxy on port 8001."
+						"description": "(Proxy) List all categories."
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "GET",
 								"header": [],
@@ -1401,7 +2010,960 @@
 								}
 							],
 							"cookie": [],
-							"body": "[\n    {\n        \"category_id\": \"cat_123\",\n        \"name\": \"Finance\",\n        \"description\": \"Financial reports\",\n        \"document_count\": 10,\n        \"created_at\": \"2024-01-01T00:00:00\"\n    }\n]"
+							"body": "[\n    {\n        \"category_id\": \"a1b2c3d4e5f6\",\n        \"name\": \"Drilling Reports\",\n        \"description\": \"Technical drilling reports\",\n        \"document_count\": 12,\n        \"created_at\": \"2024-06-15T08:30:00\"\n    },\n    {\n        \"category_id\": \"f6e5d4c3b2a1\",\n        \"name\": \"Safety Manuals\",\n        \"description\": \"HSE documentation\",\n        \"document_count\": 5,\n        \"created_at\": \"2024-07-01T10:00:00\"\n    }\n]"
+						}
+					]
+				},
+				{
+					"name": "Create Category (via Proxy)",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{client_url}}/categories",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"categories"
+							]
+						},
+						"description": "(Proxy) Create a category.",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"name\": \"New Category\", \"description\": \"Desc\"}"
+						}
+					},
+					"response": [
+						{
+							"name": "200 — Created",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{client_url}}/categories",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"categories"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"name\": \"Drilling Reports\", \"description\": \"Technical drilling reports and logs\"}"
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"category_id\": \"a1b2c3d4e5f6\",\n    \"name\": \"Drilling Reports\",\n    \"description\": \"Technical drilling reports and logs\",\n    \"document_count\": 0,\n    \"created_at\": \"2024-06-15T08:30:00\"\n}"
+						},
+						{
+							"name": "422 — Validation Error",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{client_url}}/categories",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"categories"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"description\": \"Missing name field\"}"
+								}
+							},
+							"status": "Unprocessable Entity",
+							"code": 422,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": [\n        {\n            \"loc\": [\n                \"body\",\n                \"name\"\n            ],\n            \"msg\": \"field required\",\n            \"type\": \"value_error.missing\"\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "Update Category (via Proxy)",
+					"request": {
+						"method": "PUT",
+						"url": {
+							"raw": "{{client_url}}/categories/{{category_id}}",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"categories",
+								"{{category_id}}"
+							]
+						},
+						"description": "(Proxy) Update a category.",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"name\": \"Updated\"}"
+						}
+					},
+					"response": [
+						{
+							"name": "200 — Updated",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{client_url}}/categories/{{category_id}}",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"categories",
+										"{{category_id}}"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"name\": \"Updated Name\"}"
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"category_id\": \"a1b2c3d4e5f6\",\n    \"name\": \"Updated Name\",\n    \"description\": \"Updated description\",\n    \"document_count\": 12,\n    \"created_at\": \"2024-06-15T08:30:00\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{client_url}}/categories/bad_id",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"categories",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Category not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Delete Category (via Proxy)",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{client_url}}/categories/{{category_id}}",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"categories",
+								"{{category_id}}"
+							]
+						},
+						"description": "(Proxy) Delete a category."
+					},
+					"response": [
+						{
+							"name": "200 — Deleted",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/categories/{{category_id}}",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"categories",
+										"{{category_id}}"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Category a1b2c3d4e5f6 deleted\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/categories/bad_id",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"categories",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Category not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "List Documents (via Proxy)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{client_url}}/documents",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"documents"
+							],
+							"query": [
+								{
+									"key": "category_id",
+									"value": "{{category_id}}"
+								}
+							]
+						},
+						"description": "(Proxy) List documents."
+					},
+					"response": [
+						{
+							"name": "200 — Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "[\n    {\n        \"document_id\": \"d0c1a2b3e4f5\",\n        \"category_id\": \"a1b2c3d4e5f6\",\n        \"filename\": \"Well_Report_2024.pdf\",\n        \"file_path\": \"/data/uploads/Drilling Reports/abc_Well_Report_2024.pdf\",\n        \"file_size\": 2048576,\n        \"page_count\": 45,\n        \"upload_date\": \"2024-06-15T09:00:00\",\n        \"status\": \"completed\",\n        \"batch_id\": \"b1a2t3c4h5\",\n        \"is_daily\": false,\n        \"toc\": [\n            {\n                \"title\": \"Executive Summary\",\n                \"level\": 1,\n                \"page_number\": 1,\n                \"page_end\": 3\n            },\n            {\n                \"title\": \"Drilling Operations\",\n                \"level\": 1,\n                \"page_number\": 4,\n                \"page_end\": 20\n            }\n        ],\n        \"processing_errors\": []\n    }\n]"
+						}
+					]
+				},
+				{
+					"name": "Get Document (via Proxy)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{client_url}}/documents/{{document_id}}",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"documents",
+								"{{document_id}}"
+							]
+						},
+						"description": "(Proxy) Get document metadata."
+					},
+					"response": [
+						{
+							"name": "200 — Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/{{document_id}}",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"{{document_id}}"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"document_id\": \"d0c1a2b3e4f5\",\n    \"category_id\": \"a1b2c3d4e5f6\",\n    \"filename\": \"Well_Report_2024.pdf\",\n    \"file_path\": \"/data/uploads/Drilling Reports/abc_Well_Report_2024.pdf\",\n    \"file_size\": 2048576,\n    \"page_count\": 45,\n    \"upload_date\": \"2024-06-15T09:00:00\",\n    \"status\": \"completed\",\n    \"batch_id\": \"b1a2t3c4h5\",\n    \"is_daily\": false,\n    \"toc\": [\n        {\n            \"title\": \"Executive Summary\",\n            \"level\": 1,\n            \"page_number\": 1,\n            \"page_end\": 3\n        },\n        {\n            \"title\": \"Drilling Operations\",\n            \"level\": 1,\n            \"page_number\": 4,\n            \"page_end\": 20\n        }\n    ],\n    \"processing_errors\": []\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/bad_id",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Document not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Upload Documents (via Proxy)",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{client_url}}/documents/upload/{{category_id}}",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"documents",
+								"upload",
+								"{{category_id}}"
+							]
+						},
+						"description": "(Proxy) Upload PDFs.",
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "files",
+									"type": "file",
+									"description": "PDF file(s) to upload",
+									"src": []
+								}
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "200 — Uploaded",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/upload/{{category_id}}",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"upload",
+										"{{category_id}}"
+									]
+								},
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "files",
+											"type": "file",
+											"description": "PDF file(s) to upload",
+											"src": []
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "[\n    {\n        \"document_id\": \"d0c1a2b3e4f5\",\n        \"category_id\": \"a1b2c3d4e5f6\",\n        \"filename\": \"Well_Report_2024.pdf\",\n        \"message\": \"Document uploaded successfully\",\n        \"status\": \"pending\",\n        \"batch_id\": \"b1a2t3c4h5\"\n    }\n]"
+						}
+					]
+				},
+				{
+					"name": "Delete Document (via Proxy)",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{client_url}}/documents/{{document_id}}",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"documents",
+								"{{document_id}}"
+							]
+						},
+						"description": "(Proxy) Soft delete."
+					},
+					"response": [
+						{
+							"name": "200 — Deleted",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/{{document_id}}",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"{{document_id}}"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Document d0c1a2b3e4f5 deleted\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/bad_id",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Document not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Burn Document (via Proxy)",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{client_url}}/documents/{{document_id}}/burn",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"documents",
+								"{{document_id}}",
+								"burn"
+							]
+						},
+						"description": "(Proxy) Full purge."
+					},
+					"response": [
+						{
+							"name": "200 — Burned",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/{{document_id}}/burn",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"{{document_id}}",
+										"burn"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Document d0c1a2b3e4f5 burned successfully\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/bad_id/burn",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"bad_id",
+										"burn"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Document not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Download Document (via Proxy)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{client_url}}/documents/{{document_id}}/download",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"documents",
+								"{{document_id}}",
+								"download"
+							]
+						},
+						"description": "(Proxy) Download PDF."
+					},
+					"response": [
+						{
+							"name": "200 — File",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/{{document_id}}/download",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"{{document_id}}",
+										"download"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "html",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/pdf"
+								}
+							],
+							"cookie": [],
+							"body": "[Binary PDF Data]"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/bad_id/download",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"bad_id",
+										"download"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Document not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Cleanup Daily (via Proxy)",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{client_url}}/documents/cleanup/daily",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"documents",
+								"cleanup",
+								"daily"
+							]
+						},
+						"description": "(Proxy) Cleanup expired."
+					},
+					"response": [
+						{
+							"name": "200 — Cleaned",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/documents/cleanup/daily",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"documents",
+										"cleanup",
+										"daily"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"deleted_count\": 3,\n    \"message\": \"Daily cleanup completed\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Batch Status (via Proxy)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{client_url}}/batches/{{batch_id}}",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"batches",
+								"{{batch_id}}"
+							]
+						},
+						"description": "(Proxy) Batch snapshot."
+					},
+					"response": [
+						{
+							"name": "200 — Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/batches/{{batch_id}}",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"batches",
+										"{{batch_id}}"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"batch_id\": \"b1a2t3c4h5\",\n    \"files\": {\n        \"Well_Report_2024.pdf\": {\n            \"status\": \"embedding\",\n            \"detail\": \"Generating vectors for page 12/45\"\n        },\n        \"Safety_Manual.pdf\": {\n            \"status\": \"completed\",\n            \"detail\": \"Done\"\n        }\n    },\n    \"timestamp\": \"2024-06-15T09:05:00\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/batches/bad_id",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"batches",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Batch not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Stream Batch Progress (via Proxy)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{client_url}}/batches/{{batch_id}}/progress",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"batches",
+								"{{batch_id}}",
+								"progress"
+							]
+						},
+						"description": "(Proxy) SSE progress."
+					},
+					"response": [
+						{
+							"name": "200 — SSE Stream",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/batches/{{batch_id}}/progress",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"batches",
+										"{{batch_id}}",
+										"progress"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "text/event-stream"
+								}
+							],
+							"cookie": [],
+							"body": "data: {\"filename\": \"report.pdf\", \"status\": \"chunking\", \"detail\": \"Processing page 5/20\"}\n\ndata: {\"filename\": \"report.pdf\", \"status\": \"embedding\", \"detail\": \"Generating vectors\"}\n\ndata: {\"filename\": \"report.pdf\", \"status\": \"completed\", \"detail\": \"Done\"}\n\n"
+						}
+					]
+				},
+				{
+					"name": "Terminate Batch (via Proxy)",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{client_url}}/batches/{{batch_id}}/terminate",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"batches",
+								"{{batch_id}}",
+								"terminate"
+							]
+						},
+						"description": "(Proxy) Terminate batch."
+					},
+					"response": [
+						{
+							"name": "200 — Terminated",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/batches/{{batch_id}}/terminate",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"batches",
+										"{{batch_id}}",
+										"terminate"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"batch_id\": \"b1a2t3c4h5\",\n    \"total_documents\": 5,\n    \"kept_completed\": 3,\n    \"deleted_incomplete\": 2\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/batches/bad_id/terminate",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"batches",
+										"bad_id",
+										"terminate"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Batch not found\"\n}"
 						}
 					]
 				},
@@ -1409,51 +2971,150 @@
 					"name": "Send Chat Message (via Proxy)",
 					"request": {
 						"method": "POST",
+						"url": {
+							"raw": "{{client_url}}/chat",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"chat"
+							]
+						},
+						"description": "(Proxy) Send chat message.",
 						"body": {
 							"mode": "formdata",
 							"formdata": [
 								{
 									"key": "message",
-									"value": "Summarize the key data points",
-									"type": "text"
+									"value": "What is the total depth of the well?",
+									"type": "text",
+									"description": "Required. User's question."
+								},
+								{
+									"key": "chat_id",
+									"value": "",
+									"type": "text",
+									"description": "Optional. Existing chat session ID.",
+									"disabled": true
 								},
 								{
 									"key": "category_ids",
 									"value": "[\"{{category_id}}\"]",
-									"type": "text"
+									"type": "text",
+									"description": "Optional. JSON array of category IDs."
 								},
 								{
 									"key": "top_k",
 									"value": "5",
-									"type": "text"
+									"type": "text",
+									"description": "Chunks to retrieve (1-20, default 5)."
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"description": "Optional. Image files (max 10).",
+									"src": [],
+									"disabled": true
 								}
 							]
-						},
-						"url": {
-							"raw": "{{client_url}}/chat",
-							"host": ["{{client_url}}"],
-							"path": ["chat"]
-						},
-						"description": "Send chat message via the Client Proxy. The proxy validates DTOs and forwards to the main API."
+						}
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
 								"method": "POST",
 								"header": [],
+								"url": {
+									"raw": "{{client_url}}/chat",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"chat"
+									]
+								},
 								"body": {
 									"mode": "formdata",
 									"formdata": [
 										{
 											"key": "message",
-											"value": "Summarize the key data points",
-											"type": "text"
+											"value": "What is the total depth of the well?",
+											"type": "text",
+											"description": "Required. User's question."
+										},
+										{
+											"key": "chat_id",
+											"value": "",
+											"type": "text",
+											"description": "Optional. Existing chat session ID.",
+											"disabled": true
+										},
+										{
+											"key": "category_ids",
+											"value": "[\"{{category_id}}\"]",
+											"type": "text",
+											"description": "Optional. JSON array of category IDs."
+										},
+										{
+											"key": "top_k",
+											"value": "5",
+											"type": "text",
+											"description": "Chunks to retrieve (1-20, default 5)."
+										},
+										{
+											"key": "images",
+											"type": "file",
+											"description": "Optional. Image files (max 10).",
+											"src": [],
+											"disabled": true
 										}
 									]
-								},
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"message_id\": \"msg_a1b2c3d4\",\n    \"answer\": \"Based on the drilling report [Source 1, Page 12], the well reached a total depth of 15,000 ft. The formation analysis [Source 2, Page 8] indicates high porosity in the target zone.\",\n    \"sources\": {\n        \"d0c1a2b3e4f5\": {\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"pages\": [\n                12,\n                13\n            ]\n        },\n        \"d0c1a2b3e4f6\": {\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"pages\": [\n                8\n            ]\n        }\n    },\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"section_title\": \"Drilling Summary\",\n            \"pages\": [\n                12\n            ]\n        },\n        {\n            \"source_number\": 2,\n            \"document_id\": \"d0c1a2b3e4f6\",\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"section_title\": \"Porosity Analysis\",\n            \"pages\": [\n                8\n            ]\n        }\n    ],\n    \"image_results\": [\n        {\n            \"image_id\": \"img_001\",\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"page_number\": 13,\n            \"section_title\": \"Well Diagram\",\n            \"caption\": \"Figure 4.1: Well Profile\",\n            \"image_path\": \"/static/images/d0c1a2b3e4f5/img_001.png\",\n            \"score\": 0.88\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "List Chat Sessions (via Proxy)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{client_url}}/chat",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"chat"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						},
+						"description": "(Proxy) List sessions."
+					},
+					"response": [
+						{
+							"name": "200 — Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
 								"url": {
-									"raw": "{{client_url}}/chat",
+									"raw": "{{client_url}}/chat?limit=50",
 									"host": [
 										"{{client_url}}"
 									],
@@ -1472,53 +3133,40 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"chat_id\": \"chat_abc\",\n    \"message_id\": \"msg_def\",\n    \"answer\": \"This is a response from the main API via proxy.\",\n    \"sources\": {},\n    \"inline_citations\": [],\n    \"image_results\": []\n}"
+							"body": "[\n    {\n        \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n        \"category_ids\": [\n            \"a1b2c3d4e5f6\"\n        ],\n        \"messages\": [\n            {\n                \"message_id\": \"msg_u001\",\n                \"role\": \"user\",\n                \"content\": \"What is the total depth?\",\n                \"image_paths\": [],\n                \"sources\": null,\n                \"timestamp\": \"2024-06-15T10:00:00\"\n            },\n            {\n                \"message_id\": \"msg_a001\",\n                \"role\": \"assistant\",\n                \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n                \"image_paths\": [],\n                \"sources\": {\n                    \"d0c1a2b3e4f5\": {\n                        \"filename\": \"Well_Report_2024.pdf\",\n                        \"pages\": [\n                            12\n                        ]\n                    }\n                },\n                \"timestamp\": \"2024-06-15T10:00:05\"\n            }\n        ],\n        \"created_at\": \"2024-06-15T10:00:00\",\n        \"updated_at\": \"2024-06-15T10:00:05\"\n    }\n]"
 						}
 					]
 				},
 				{
-					"name": "RAG Query (via Proxy)",
+					"name": "Get Chat Session (via Proxy)",
 					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"query\": \"What are the key metrics?\",\n    \"top_k\": 5\n}"
-						},
+						"method": "GET",
 						"url": {
-							"raw": "{{client_url}}/query",
-							"host": ["{{client_url}}"],
-							"path": ["query"]
+							"raw": "{{client_url}}/chat/{{chat_id}}",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"chat",
+								"{{chat_id}}"
+							]
 						},
-						"description": "RAG Query via the Client Proxy."
+						"description": "(Proxy) Get session."
 					},
 					"response": [
 						{
-							"name": "Success Example",
+							"name": "200 — Success",
 							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"query\": \"What are the key metrics?\",\n    \"top_k\": 5\n}"
-								},
+								"method": "GET",
+								"header": [],
 								"url": {
-									"raw": "{{client_url}}/query",
+									"raw": "{{client_url}}/chat/{{chat_id}}",
 									"host": [
 										"{{client_url}}"
 									],
 									"path": [
-										"query"
+										"chat",
+										"{{chat_id}}"
 									]
 								}
 							},
@@ -1532,7 +3180,240 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"query\": \"What are the key metrics?\",\n    \"answer\": \"The key metrics are...\",\n    \"retrieved_chunks\": [],\n    \"sources\": [],\n    \"inline_citations\": []\n}"
+							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"category_ids\": [\n        \"a1b2c3d4e5f6\"\n    ],\n    \"messages\": [\n        {\n            \"message_id\": \"msg_u001\",\n            \"role\": \"user\",\n            \"content\": \"What is the total depth?\",\n            \"image_paths\": [],\n            \"sources\": null,\n            \"timestamp\": \"2024-06-15T10:00:00\"\n        },\n        {\n            \"message_id\": \"msg_a001\",\n            \"role\": \"assistant\",\n            \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n            \"image_paths\": [],\n            \"sources\": {\n                \"d0c1a2b3e4f5\": {\n                    \"filename\": \"Well_Report_2024.pdf\",\n                    \"pages\": [\n                        12\n                    ]\n                }\n            },\n            \"timestamp\": \"2024-06-15T10:00:05\"\n        }\n    ],\n    \"created_at\": \"2024-06-15T10:00:00\",\n    \"updated_at\": \"2024-06-15T10:00:05\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/chat/bad_id",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"chat",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Chat not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Delete Chat Session (via Proxy)",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{client_url}}/chat/{{chat_id}}",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"chat",
+								"{{chat_id}}"
+							]
+						},
+						"description": "(Proxy) Delete session."
+					},
+					"response": [
+						{
+							"name": "200 — Deleted",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/chat/{{chat_id}}",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"chat",
+										"{{chat_id}}"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Chat c1h2a3t4-abcd-efgh-ijkl-567890 deleted\"\n}"
+						},
+						{
+							"name": "404 — Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/chat/bad_id",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"chat",
+										"bad_id"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Chat not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "RAG Query (via Proxy)",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{client_url}}/query",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"query"
+							]
+						},
+						"description": "(Proxy) RAG query.",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"query\": \"What are the key metrics?\", \"top_k\": 5}"
+						}
+					},
+					"response": [
+						{
+							"name": "200 — Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{client_url}}/query",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"query"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"query\": \"What are the production statistics for Q3?\", \"top_k\": 5}"
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"answer\": \"According to the quarterly report [Source 1, Page 5], production increased by 15% in Q3 2024.\",\n    \"retrieved_chunks\": [\n        {\n            \"chunk_id\": \"d0c1_chunk_04\",\n            \"content\": \"Q3 production output reached 45,000 barrels per day...\",\n            \"score\": 0.95,\n            \"section_title\": \"Q3 Production Summary\",\n            \"page_start\": 5,\n            \"page_end\": 6,\n            \"image_ids\": [\n                \"img_001\"\n            ],\n            \"images\": [],\n            \"tables\": []\n        }\n    ],\n    \"sources\": [\n        \"d0c1a2b3e4f5\"\n    ],\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"filename\": \"Quarterly_Report_Q3.pdf\",\n            \"section_title\": \"Q3 Production Summary\",\n            \"pages\": [\n                5\n            ]\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "Image Search (via Proxy)",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{client_url}}/query/image-search",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"query",
+								"image-search"
+							]
+						},
+						"description": "(Proxy) Image search.",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"query_text\": \"flowchart\", \"top_k\": 5}"
+						}
+					},
+					"response": [
+						{
+							"name": "200 — Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{client_url}}/query/image-search",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"query",
+										"image-search"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\"query_text\": \"production flowchart\", \"top_k\": 5}"
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"has_query_image\": false,\n    \"results\": [\n        {\n            \"image_id\": \"img_001\",\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"page_number\": 13,\n            \"section_title\": \"Process Flow\",\n            \"caption\": \"Figure 4.1: Production Flowchart\",\n            \"image_path\": \"/static/images/d0c1a2b3e4f5/img_001.png\",\n            \"score\": 0.92\n        }\n    ],\n    \"count\": 1\n}"
 						}
 					]
 				}
