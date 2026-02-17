@@ -45,6 +45,32 @@ services:
       - petrorag_network
     restart: unless-stopped
 
+  client_proxy:
+    build:
+      context: .
+      dockerfile: python_client_app/Dockerfile
+    container_name: petrorag_client_proxy
+    ports:
+      - "8001:8001"
+    depends_on:
+      - api
+    environment:
+      - RAG_API_URL=http://api:8000/api
+    networks:
+      - petrorag_network
+    restart: unless-stopped
+
+  frontend:
+    image: nginx:alpine
+    container_name: petrorag_frontend
+    ports:
+      - "8002:80"
+    volumes:
+      - ./client:/usr/share/nginx/html:ro
+    networks:
+      - petrorag_network
+    restart: unless-stopped
+
 volumes:
   mongo_data:
   qdrant_data:

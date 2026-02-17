@@ -21,7 +21,15 @@ pip install -r requirements.txt
 # Start API
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-*Alternatively, use Docker: `docker-compose up`*
+*Alternatively, run the FULL stack with Docker:*
+```bash
+docker-compose up --build
+```
+This starts:
+- **Backend API**: http://localhost:8000
+- **Client Proxy**: http://localhost:8001
+- **Frontend UI**: http://localhost:8002
+
 
 ## Step 2: Start Python Client Proxy
 Open a **new** terminal window:
