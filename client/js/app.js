@@ -379,16 +379,14 @@ function renderDocuments() {
     updateDashboardStats();
 }
 
-function downloadDocument(documentId) {
-    // Trigger browser download via anchor
-    const url = Api.getDownloadUrl(documentId);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showToast('Download started', 'info');
+async function downloadDocument(documentId, suggestedFilename) {
+    try {
+        showToast('Download starting...', 'info');
+        await Api.downloadDocumentBlob(documentId, suggestedFilename);
+        showToast('Download complete', 'success');
+    } catch (e) {
+        showToast('Download failed: ' + e.message, 'error');
+    }
 }
 
 async function handleUpload(files) {
@@ -649,8 +647,7 @@ function renderMessageContent(msg) {
             (match, filename, pageRange) => {
                 const citation = citationLookup[filename];
                 if (citation && citation.document_id) {
-                    const downloadUrl = Api.getDownloadUrl(citation.document_id);
-                    return `<a href="${downloadUrl}" target="_blank" class="inline-citation" title="${filename} — Page ${pageRange}">`
+                    return `<a href="#" onclick="event.preventDefault(); downloadDocument('${citation.document_id}', '${filename.replace(/'/g, "\\\'")}')" class="inline-citation" title="${filename} — Page ${pageRange}">`
                          + `<i class="fa-solid fa-file-pdf"></i> ${filename}, p.${pageRange}</a>`;
                 }
                 // No matching citation data — still style it
@@ -658,10 +655,27 @@ function renderMessageContent(msg) {
             }
         );
     } else if (msg.role !== 'user') {
-        // Fallback: style any [filename.pdf, Page X-Y] without structured data
+        // Fallback: use sources map to create clickable inline citations
+        const filenameToDid = {};
+        if (msg.sources && typeof msg.sources === 'object' && !Array.isArray(msg.sources)) {
+            Object.entries(msg.sources).forEach(([docId, sourceData]) => {
+                if (typeof sourceData === 'object' && sourceData.filename) {
+                    filenameToDid[sourceData.filename] = docId;
+                }
+            });
+        }
+
         content = content.replace(
             /\[([^\[\]]+?\.\w{2,5}),\s*Page[s]?\s*([\d\-–]+)\]/g,
-            '<span class="inline-citation"><i class="fa-solid fa-file-lines"></i> $1, p.$2</span>'
+            (match, filename, pageRange) => {
+                const docId = filenameToDid[filename];
+                if (docId) {
+                    return `<a href="#" onclick="event.preventDefault(); downloadDocument('${docId}', '${filename.replace(/'/g, "\\'")}')"
+                               class="inline-citation" title="${filename} — Page ${pageRange}">`
+                         + `<i class="fa-solid fa-file-pdf"></i> ${filename}, p.${pageRange}</a>`;
+                }
+                return `<span class="inline-citation"><i class="fa-solid fa-file-lines"></i> ${filename}, p.${pageRange}</span>`;
+            }
         );
     }
 
@@ -703,9 +717,8 @@ function renderMessageContent(msg) {
                 }
 
                 const pageStr = Array.isArray(pages) ? pages.join(', ') : pages;
-                const downloadUrl = Api.getDownloadUrl(docId);
 
-                html += `<a href="${downloadUrl}" target="_blank" class="source-item" title="Download ${filename}">
+                html += `<a href="#" onclick="event.preventDefault(); downloadDocument('${docId}', '${filename.replace(/'/g, "\\\'")}')" class="source-item" title="Download ${filename}">
                             <i class="fa-solid fa-file-pdf"></i> ${filename} (p. ${pageStr})
                          </a>`;
             });

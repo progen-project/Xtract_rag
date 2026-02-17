@@ -2,8 +2,17 @@
  * PetroRAG API Client
  * Wraps all communication with the Python Client Proxy (port 8001).
  */
-const API_BASE = 'http://localhost:8001/client-api';
-const BACKEND_BASE = 'http://localhost:8000';
+// Detect environment or use config
+const HOST = window.location.hostname;
+const PROTOCOL = window.location.protocol;
+const PORT_CLIENT = '8001';
+const PORT_BACKEND = '8000';
+
+// If running on localhost, use distinct ports.
+// If deployed (e.g. via Nginx reverse proxy), these usually map to paths like /api or /client-api
+// But for this Docker setup where ports are exposed directly:
+const API_BASE = `${PROTOCOL}//${HOST}:${PORT_CLIENT}/client-api`;
+const BACKEND_BASE = `${PROTOCOL}//${HOST}:${PORT_BACKEND}`;
 
 class Api {
     /**
@@ -100,6 +109,32 @@ class Api {
 
     static getDownloadUrl(documentId) {
         return `${API_BASE}/documents/${documentId}/download`;
+    }
+
+    /**
+     * Download a document with the correct filename.
+     * Uses fetch + blob to bypass cross-origin download attribute limitations.
+     */
+    static async downloadDocumentBlob(documentId, suggestedFilename) {
+        const res = await fetch(`${API_BASE}/documents/${documentId}/download`);
+        if (!res.ok) throw new Error('Download failed');
+
+        // Extract filename from Content-Disposition header
+        const disp = res.headers.get('content-disposition') || '';
+        let filename = suggestedFilename || 'document.pdf';
+        const match = disp.match(/filename="?([^";\n]+)"?/);
+        if (match) filename = match[1].trim();
+
+        // Create blob URL (same-origin) so download attribute works
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     static async cleanupDaily() {
