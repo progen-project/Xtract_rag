@@ -3,6 +3,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Body, Form
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 import json
+import asyncio
 
 from python_client_app.services.rag_client import RAGClientService
 from python_client_app.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
@@ -13,6 +14,7 @@ from python_client_app.schemas.query import (
     QueryRequest, QueryResponse,
     ImageSearchRequest, ImageSearchResponse,
 )
+
 
 router = APIRouter()
 rag_service = RAGClientService()
@@ -95,19 +97,32 @@ async def get_batch_status(batch_id: str):
         raise HTTPException(status_code=404, detail="Batch not found")
     return status
 
-@router.post("/batches/{batch_id}/terminate", response_model=TerminateBatchResponse, tags=["Batches"])
-async def terminate_batch(batch_id: str):
-    return await rag_service.terminate_batch(batch_id)
-
 @router.get("/batches/{batch_id}/progress", tags=["Batches"])
 async def stream_batch_progress(batch_id: str):
-    """Proxy SSE stream."""
-    async def generator():
-        async for data in rag_service.stream_batch_progress(batch_id):
-            yield f"data: {json.dumps(data)}\n\n"
-            
+    
+    async def generator_with_heartbeat():
+        queue = asyncio.Queue()
+
+        async def feed():
+            async for data in rag_service.stream_batch_progress(batch_id):
+                await queue.put(("data", data))
+            await queue.put(("done", None))
+
+        asyncio.create_task(feed())
+
+        while True:
+            try:
+                # انتظر data أو ابعت heartbeat كل 15 ثانية
+                kind, data = await asyncio.wait_for(queue.get(), timeout=15)
+                if kind == "done":
+                    break
+                yield f"data: {json.dumps(data)}\n\n"
+            except asyncio.TimeoutError:
+                # ابعت heartbeat يخلي الـ connection حي
+                yield f": heartbeat\n\n"
+
     return StreamingResponse(
-        generator(),
+        generator_with_heartbeat(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -115,7 +130,6 @@ async def stream_batch_progress(batch_id: str):
             "Connection": "keep-alive",
         }
     )
-
 # --- Chat ---
 @router.get("/chat", response_model=List[ChatSession], tags=["Chat"])
 async def list_chats(limit: int = 50):
