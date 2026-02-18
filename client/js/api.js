@@ -182,18 +182,32 @@ class Api {
 
     static streamBatchProgress(batchId, onMessage, onError) {
         const evtSource = new EventSource(`${API_BASE}/batches/${batchId}/progress`);
-
+        let batchCompleted = false;
+        
         evtSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
             onMessage(data);
+            
+            // ✅ تتبع لو الباتش خلص
+            if (data.type === 'initial_state') {
+                // initial state - مش خلص بعد
+            } else if (data.status === 'completed' || 
+                    data.status === 'failed' || 
+                    data.status === 'cancelled') {
+                batchCompleted = true;
+            }
         };
-
+        
         evtSource.onerror = (err) => {
-            console.error("EventSource failed:", err);
             evtSource.close();
-            if (onError) onError(err);
+            
+            // ✅ لو الباتش خلص، ده مش error حقيقي
+            if (!batchCompleted) {
+                console.error("EventSource failed:", err);
+                if (onError) onError(err);
+            }
         };
-
+        
         return evtSource;
     }
 

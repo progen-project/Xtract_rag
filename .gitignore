@@ -1,6 +1,7 @@
 ragenv
 venv
 uploads
+chat_images
 .env
 extracted_images
 # Python
