@@ -126,6 +126,14 @@ class Api {
         return `${API_BASE}/documents/${documentId}/download`;
     }
 
+    /**
+     * Open a document in a new browser tab at a specific page.
+     * Uses the PDF viewer's #page=N anchor.
+     */
+    static viewDocumentAtPage(documentId, page) {
+        const url = `${API_BASE}/documents/${documentId}/view#page=${page}`;
+        window.open(url, '_blank');
+    }
     
     /**
      * Download a document with the correct filename.
@@ -276,7 +284,7 @@ class Api {
         }
 
         try {
-            const res = await fetch(`${BACKEND_BASE}/api/chat/stream`, {
+            const res = await fetch(`${API_BASE}/chat/stream`, {
                 method: 'POST',
                 body: formData
             });
