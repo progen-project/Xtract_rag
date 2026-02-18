@@ -27,13 +27,15 @@ class ChatRepository:
     async def create(
         self,
         chat_id: str,
-        category_ids: Optional[List[str]] = None
+        category_ids: Optional[List[str]] = None,
+        document_ids: Optional[List[str]] = None
     ) -> ChatSession:
         """Create a new chat session."""
         now = datetime.utcnow()
         chat = ChatSession(
             chat_id=chat_id,
             category_ids=category_ids,
+            document_ids=document_ids,
             messages=[],
             created_at=now,
             updated_at=now

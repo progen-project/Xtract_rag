@@ -57,6 +57,7 @@ class ChatController:
         message: str,
         chat_id: Optional[str] = None,
         category_ids: Optional[List[str]] = None,
+        document_ids: Optional[List[str]] = None,
         image_paths: Optional[List[str]] = None,
         top_k: int = 10
     ) -> ChatResponse:
@@ -78,13 +79,15 @@ class ChatController:
         is_new_chat = chat_id is None
         if is_new_chat:
             chat_id = f"chat_{uuid.uuid4().hex[:12]}"
-            await self.chat_repo.create(chat_id, category_ids)
+            await self.chat_repo.create(chat_id, category_ids, document_ids)
         else:
             existing_chat = await self.chat_repo.get_by_id(chat_id)
             if not existing_chat:
                 raise ChatNotFoundError(chat_id)
             if category_ids is None:
                 category_ids = existing_chat.category_ids
+            if document_ids is None:
+                document_ids = existing_chat.document_ids
         
         # Create user message
         user_message_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -125,6 +128,7 @@ class ChatController:
             query_text=message,
             query_image_data=query_image_data,
             top_k=top_k,
+            document_ids=document_ids,
             category_ids=category_ids,
             search_text=True,
             search_tables=True,
@@ -272,6 +276,7 @@ class ChatController:
         message: str,
         chat_id: Optional[str] = None,
         category_ids: Optional[List[str]] = None,
+        document_ids: Optional[List[str]] = None,
         image_paths: Optional[List[str]] = None,
         top_k: int = 10
     ):
@@ -292,13 +297,15 @@ class ChatController:
         is_new_chat = chat_id is None
         if is_new_chat:
             chat_id = f"chat_{uuid.uuid4().hex[:12]}"
-            await self.chat_repo.create(chat_id, category_ids)
+            await self.chat_repo.create(chat_id, category_ids, document_ids)
         else:
             existing_chat = await self.chat_repo.get_by_id(chat_id)
             if not existing_chat:
                 raise ChatNotFoundError(chat_id)
             if category_ids is None:
                 category_ids = existing_chat.category_ids
+            if document_ids is None:
+                document_ids = existing_chat.document_ids
 
         # Create user message
         user_message_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -334,6 +341,7 @@ class ChatController:
             query_text=message,
             query_image_data=query_image_data,
             top_k=top_k,
+            document_ids=document_ids,
             category_ids=category_ids,
             search_text=True,
             search_tables=True,

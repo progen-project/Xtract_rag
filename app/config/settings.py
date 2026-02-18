@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     mongodb_uri: str = Field(default="mongodb://localhost:27017", alias="MONGODB_URI")
     mongodb_database: str = Field(default="petro_rag", alias="MONGODB_DATABASE")
     
+    # Redis Configuration
+    redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
+    
     # GROQ API Configuration
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     qwen_text_model: str = Field(default="qwen/qwen3-32b", alias="QWEN_TEXT_MODEL")

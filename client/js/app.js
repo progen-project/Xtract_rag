@@ -15,6 +15,7 @@ let state = {
     selectedCategoryId: null,
     selectedChatId: null,
     selectedCategoryIds: [], // for chat context
+    selectedDocumentIds: [], // for chat context (specific docs)
     activeBatchId: null,
     eventSource: null
 };
@@ -365,7 +366,7 @@ function renderDocuments() {
             <td style="color: var(--text-muted); font-size: 0.82rem;">${new Date(doc.upload_date).toLocaleDateString()}</td>
             <td>
                 <div class="doc-actions">
-                    <button class="btn btn-secondary btn-icon" title="Download" onclick="downloadDocument('${doc.document_id}')">
+                    <button class="btn btn-secondary btn-icon" title="Download" onclick="downloadDocument('${doc.document_id}', '${doc.filename.replace(/'/g, "\\'")}')">
                         <i class="fa-solid fa-download"></i>
                     </button>
                     <button class="btn btn-danger btn-icon" title="Burn Document" onclick="burnDocument('${doc.document_id}')">
@@ -551,14 +552,129 @@ function renderChatCategorySelection() {
     }
 
     container.innerHTML = state.categories.map(cat => `
-        <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-            <input type="checkbox" name="chat-cat" value="${cat.category_id}" id="chk-${cat.category_id}" checked>
-            <label for="chk-${cat.category_id}" style="cursor: pointer; flex: 1;">
-                <div style="font-weight: 500; font-size: 0.9rem;">${cat.name}</div>
-                <div style="font-size: 0.72rem; color: var(--text-muted);">${cat.document_count} documents</div>
+        <div class="category-group" data-id="${cat.category_id}" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem;">
+                <input type="checkbox" name="chat-cat" value="${cat.category_id}" id="chk-${cat.category_id}" onchange="toggleCategoryDocs('${cat.category_id}', this.checked)">
+                <label for="chk-${cat.category_id}" style="cursor: pointer; flex: 1;">
+                    <div style="font-weight: 500; font-size: 0.9rem;">${cat.name}</div>
+                    <div style="font-size: 0.72rem; color: var(--text-muted);">${cat.document_count} documents</div>
+                </label>
+                <button class="btn btn-sm btn-ghost" onclick="toggleDocsVisibility('${cat.category_id}')" title="Toggle Documents">
+                    <i class="fa-solid fa-chevron-down" id="chevron-${cat.category_id}"></i>
+                </button>
+            </div>
+            <div id="docs-${cat.category_id}" class="category-docs hidden" style="padding-left: 2rem; border-left: 2px solid var(--border-color); margin-left: 1rem;">
+                <div class="loading-spinner-small hidden" id="loading-${cat.category_id}">Loading...</div>
+                <div class="docs-list" id="list-${cat.category_id}"></div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function toggleCategoryDocs(categoryId, isChecked) {
+    const docsContainer = document.getElementById(`docs-${categoryId}`);
+    const listContainer = document.getElementById(`list-${categoryId}`);
+    const loadingSpinner = document.getElementById(`loading-${categoryId}`);
+    
+    // Auto-expand if checked
+    if (isChecked) {
+        docsContainer.classList.remove('hidden');
+        
+        // Fetch if empty
+        if (listContainer.children.length === 0) {
+            loadingSpinner.classList.remove('hidden');
+            try {
+                const docs = await Api.listDocumentsByCategory(categoryId);
+                renderCategoryDocsList(categoryId, docs);
+            } catch (e) {
+                listContainer.innerHTML = '<div style="color:var(--danger-color); font-size:0.8rem;">Failed to load</div>';
+            } finally {
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+        
+        // Check all docs by default when category is checked
+        // querySelectorAll inside listContainer
+        const checkboxes = listContainer.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(cb => cb.checked = true);
+        
+    } else {
+        // If unchecked, uncheck all docs (optional UX choice)
+        const checkboxes = listContainer.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(cb => cb.checked = false);
+        docsContainer.classList.add('hidden');
+    }
+}
+
+function toggleDocsVisibility(categoryId) {
+    const docsContainer = document.getElementById(`docs-${categoryId}`);
+    docsContainer.classList.toggle('hidden');
+    const chevron = document.getElementById(`chevron-${categoryId}`);
+    chevron.classList.toggle('fa-chevron-up');
+    chevron.classList.toggle('fa-chevron-down');
+    
+    // If expanding and empty, load docs
+    if (!docsContainer.classList.contains('hidden')) {
+        const listContainer = document.getElementById(`list-${categoryId}`);
+        if (listContainer.children.length === 0) {
+            // Trigger load logic
+             // Reuse toggleCategoryDocs logic but without forced checking?
+             // Let's just call load
+             loadCategoryDocsOnly(categoryId);
+        }
+    }
+}
+
+async function loadCategoryDocsOnly(categoryId) {
+    const listContainer = document.getElementById(`list-${categoryId}`);
+    const loadingSpinner = document.getElementById(`loading-${categoryId}`);
+    
+    if (listContainer.children.length > 0) return;
+    
+    loadingSpinner.classList.remove('hidden');
+    try {
+        const docs = await Api.listDocumentsByCategory(categoryId);
+        renderCategoryDocsList(categoryId, docs);
+    } catch (e) {
+        listContainer.innerHTML = '<div style="color:var(--danger-color); font-size:0.8rem;">Failed to load</div>';
+    } finally {
+        loadingSpinner.classList.add('hidden');
+    }
+}
+
+function renderCategoryDocsList(categoryId, docs) {
+    const listContainer = document.getElementById(`list-${categoryId}`);
+    if (docs.length === 0) {
+        listContainer.innerHTML = '<div style="color:var(--text-muted); font-style:italic; font-size:0.8rem;">No documents</div>';
+        return;
+    }
+    
+    listContainer.innerHTML = `
+        <div style="margin-bottom: 0.5rem; font-size: 0.8rem;">
+            <a href="#" onclick="event.preventDefault(); toggleSelectAllDocs('${categoryId}', true)">Select All</a> / 
+            <a href="#" onclick="event.preventDefault(); toggleSelectAllDocs('${categoryId}', false)">None</a>
+        </div>
+    ` + docs.map(doc => `
+        <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0;">
+            <input type="checkbox" name="chat-doc" value="${doc.document_id}" id="doc-${doc.document_id}" checked data-category="${categoryId}">
+            <label for="doc-${doc.document_id}" style="cursor: pointer; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                ${doc.filename}
             </label>
         </div>
     `).join('');
+}
+
+function toggleSelectAllDocs(categoryId, select) {
+    const container = document.getElementById(`list-${categoryId}`);
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = select);
+    
+    // Also update category checkbox state? 
+    // If all selected -> check category? 
+    // If none selected -> uncheck category?
+    // Let's keep it simple for now. 
+    // If at least one doc is checked, the category ID should effectively be active for filtering purposes?
+    // Or we just rely on doc IDs.
 }
 
 function toggleSelectAllCategories(select) {
@@ -566,27 +682,146 @@ function toggleSelectAllCategories(select) {
 }
 
 function confirmStartChat() {
-    const selected = Array.from(document.querySelectorAll('input[name="chat-cat"]:checked')).map(cb => cb.value);
+    // Get selected categories
+    const selectedCats = Array.from(document.querySelectorAll('input[name="chat-cat"]:checked')).map(cb => cb.value);
 
-    if (selected.length === 0) {
-        if (!confirm('No categories selected. The chat will search all documents. Proceed?')) return;
+    // Get selected documents
+    // Note: documents might not be loaded if category wasn't expanded/checked. 
+    // If a category is checked BUT its docs aren't loaded, we assume ALL docs in that category are selected.
+    
+    let selectedDocs = [];
+    let explicitDocsSelected = false;
+
+    // Check loaded documents
+    const docCheckboxes = document.querySelectorAll('input[name="chat-doc"]');
+    if (docCheckboxes.length > 0) {
+        explicitDocsSelected = true;
+        selectedDocs = Array.from(document.querySelectorAll('input[name="chat-doc"]:checked')).map(cb => cb.value);
     }
+    
+    // Logic: 
+    // If a category is checked, we want to include it in `selectedCategoryIds`.
+    // If specific documents in that category are UNCHECKED, we want to filter by `document_ids`.
+    // BUT, if the category was never expanded, we don't have document IDs.
+    
+    // Simplified logic:
+    // 1. Pass all selected category IDs.
+    // 2. Pass selected document IDs ONLY for categories that have been loaded. 
+    //    If a category is checked and its docs are NOT loaded, we don't send individual doc IDs for it (implying all).
+    //    If a category is checked and docs ARE loaded, we send the checked ones.
+    
+    // Actually, backend filters by AND logic usually? Or "Category AND (Doc A OR Doc B)".
+    // Backend `_build_filters`:
+    // if category_ids: filter by categories
+    // if document_ids: filter by document_ids
+    // If BOTH are present, it matches (category IN [...] AND document IN [...]).
+    
+    // So if I send [Cat1] and [Doc1_from_Cat1], it works.
+    // If I send [Cat1] and NO docs, it searches whole category.
+    // If I send [Cat1] and [Doc1_from_Cat1, Doc2_from_Cat1] (subset), it searches those docs.
+    
+    // What if I send [Cat1, Cat2]. Cat1 is fully selected (no docs loaded). Cat2 is partially selected (DocA checked, DocB unchecked).
+    // I need to send [DocA] and ALL docs from Cat1?
+    // No, if I send `document_ids`, ONLY those documents are searched. Qdrant filter `document_id IN [...]`.
+    // This implies that if I provide `document_ids`, I MUST provide IDs for ALL documents I want to search, across ALL categories. I can't mix "All of Cat1" + "Subset of Cat2" easily unless I resolve "All of Cat1" to a list of IDs.
+    
+    // Solution:
+    // If a category is checked and its document list is NOT loaded, auto-fetch its documents IDs? 
+    // Or just fetch them now?
+    
+    // Use `await` logic? `confirmStartChat` isn't async right now but it can be.
+    // Let's make it async.
+    
+    // However, for UX speed, maybe we only support "Specific Documents" if the user actually opened the list?
+    // If the user didn't open the list, we assume they want the whole category.
+    // If I send `document_ids`, I restrict search to ONLY those IDs.
+    
+    // So, if ANY document selection happened (i.e. lists loaded), I should probably try to be precise.
+    
+    // Let's try this:
+    // If `document_ids` are sent, `category_ids` becomes redundant for filter *logic* (but maybe useful for metadata).
+    // But `UnifiedSearchService` checks `if document_ids:` -> add filter. `if category_ids:` -> add filter.
+    // They are combined with `must`.
+    
+    // So if I pass `document_ids`, it will restricts to those.
+    // If I leave `document_ids` empty, it searches all in `category_ids`.
+    
+    // Problem: User wants Cat1 (All) and Cat2 (DocA).
+    // If I send `category_ids=[1, 2]` and `document_ids=[A]`, the search will look for chunks that are in (1 OR 2) AND (A).
+    // Since A is in 2, it finds A. It does NOT find anything from 1 because they are not A.
+    // So I effectively lose Cat1.
+    
+    // Conclusion: To support mixed selection, I MUST resolve "All of Cat1" to a list of document IDs and send a comprehensive list of `document_ids`.
+    
+    // So, `confirmStartChat` needs to be async and fetch docs for checked-but-unloaded categories if we are in "mixed mode".
+    
+    // Mixed mode detection: Are there any unchecked documents in a checked category?
+    // Or simpler: If the user opened ANY document list, we assume they are being specific.
+    
+    // Let's implement a robust way:
+    // For each selected category:
+    //   If docs list is loaded: collect checked docs.
+    //   If docs list is NOT loaded: fetch docs, collect all.
+    // Combine all doc IDs. 
+    // If the resulting list of doc IDs equals the total count of docs in those categories, we can just send `category_ids` and NO `document_ids`. 
+    // Otherwise, send the `document_ids`.
+    
+    startChatAsync(selectedCats);
+}
 
-    state.selectedCategoryIds = selected;
-    state.selectedChatId = null;
-    state.selectedCategoryId = null;
+async function startChatAsync(selectedCats) {
+    showLoading();
+    try {
+        let allSelectedDocIds = [];
+        let totalDocsInSelectedCats = 0;
+        
+        for (const catId of selectedCats) {
+            const listContainer = document.getElementById(`list-${catId}`);
+            const cat = state.categories.find(c => c.category_id === catId);
+            totalDocsInSelectedCats += (cat ? cat.document_count : 0);
+            
+            if (listContainer && listContainer.children.length > 0) {
+                // Docs loaded - get checked ones
+                const checked = Array.from(listContainer.querySelectorAll('input[name="chat-doc"]:checked')).map(cb => cb.value);
+                allSelectedDocIds.push(...checked);
+            } else {
+                // Docs not loaded - fetch all
+                // Optimize: simple listDocumentsByCategory call
+                const docs = await Api.listDocumentsByCategory(catId);
+                allSelectedDocIds.push(...docs.map(d => d.document_id));
+            }
+        }
+        
+        // If we selected ALL documents in the categories, we don't need to filter by doc ID
+        const isAllSelected = allSelectedDocIds.length === totalDocsInSelectedCats;
+        
+        state.selectedCategoryIds = selectedCats;
+        state.selectedDocumentIds = isAllSelected ? [] : allSelectedDocIds;
+        state.selectedChatId = null;
+        
+        if (state.selectedCategoryIds.length === 0 && state.selectedDocumentIds.length === 0) {
+             if (!confirm('No categories or documents selected. Proceed with empty context?')) {
+                 hideLoading();
+                 return;
+             }
+        }
 
-    document.getElementById('chat-messages').innerHTML = `
-        <div class="message ai">
-            <div class="markdown-content">
-                <p>Hello! I'm <strong>PetroRAG</strong>. I'll search across <strong>${selected.length}</strong> selected categories.</p>
+        document.getElementById('chat-messages').innerHTML = `
+            <div class="message ai">
+                <div class="markdown-content">
+                    <p>Hello! I'm <strong>PetroRAG</strong>. I'll search across <strong>${state.selectedDocumentIds.length > 0 ? state.selectedDocumentIds.length + ' documents' : state.selectedCategoryIds.length + ' categories'}</strong>.</p>
+                </div>
             </div>
-        </div>
-    `;
+        `;
 
-    closeModal('new-chat-modal');
-    switchView('chat');
-    renderSidebarChats();
+        closeModal('new-chat-modal');
+        switchView('chat');
+        renderSidebarChats();
+    } catch (e) {
+        showToast('Error starting chat: ' + e.message, 'error');
+    } finally {
+        hideLoading();
+    }
 }
 
 async function selectChat(id) {
@@ -848,6 +1083,7 @@ async function sendMessage() {
         message,
         state.selectedChatId,
         state.selectedCategoryIds,
+        state.selectedDocumentIds,
         imagesToSend,
         // onToken: append each token to the AI message
         (token) => {
@@ -978,3 +1214,6 @@ window.toggleSidebar = toggleSidebar;
 window.scrollChatToBottom = scrollChatToBottom;
 window.downloadDocument = downloadDocument;
 window.removeChatImage = removeChatImage;
+window.toggleCategoryDocs = toggleCategoryDocs;
+window.toggleDocsVisibility = toggleDocsVisibility;
+window.toggleSelectAllDocs = toggleSelectAllDocs;

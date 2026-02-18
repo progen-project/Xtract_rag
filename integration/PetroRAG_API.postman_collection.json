@@ -262,6 +262,55 @@
 					]
 				},
 				{
+					"name": "List Category Documents (Light)",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/categories/{{category_id}}/documents",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"categories",
+								"{{category_id}}",
+								"documents"
+							]
+						},
+						"description": "Get a lightweight list of documents in a category (ID, filename, status)."
+					},
+					"response": [
+						{
+							"name": "200 — Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/categories/{{category_id}}/documents",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"categories",
+										"{{category_id}}",
+										"documents"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "[\n    {\n        \"document_id\": \"d1\",\n        \"filename\": \"doc.pdf\",\n        \"status\": \"completed\",\n        \"is_daily\": false,\n        \"upload_date\": \"2024-06-15T09:00:00\"\n    }\n]"
+						}
+					]
+				},
+				{
 					"name": "Update Category",
 					"request": {
 						"method": "PUT",
@@ -1353,6 +1402,12 @@
 									"description": "Optional. JSON array of category IDs."
 								},
 								{
+									"key": "document_ids",
+									"value": "[\"{{document_id}}\"]",
+									"type": "text",
+									"description": "Optional. JSON array of document IDs."
+								},
+								{
 									"key": "top_k",
 									"value": "5",
 									"type": "text",
@@ -1414,6 +1469,12 @@
 											"value": "[\"{{category_id}}\"]",
 											"type": "text",
 											"description": "Optional. JSON array of category IDs."
+										},
+										{
+											"key": "document_ids",
+											"value": "[\"{{document_id}}\"]",
+											"type": "text",
+											"description": "Optional. JSON array of document IDs."
 										},
 										{
 											"key": "top_k",
@@ -1487,6 +1548,11 @@
 								{
 									"key": "category_ids",
 									"value": "[\"{{category_id}}\"]",
+									"type": "text"
+								},
+								{
+									"key": "document_ids",
+									"value": "[\"{{document_id}}\"]",
 									"type": "text"
 								},
 								{
@@ -2142,6 +2208,54 @@
 					},
 					"response": [
 						{
+							"name": "200 — Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{client_url}}/categories/{{category_id}}/documents",
+									"host": [
+										"{{client_url}}"
+									],
+									"path": [
+										"categories",
+										"{{category_id}}",
+										"documents"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "[\n    {\n        \"document_id\": \"d1\",\n        \"filename\": \"doc.pdf\",\n        \"status\": \"completed\",\n        \"is_daily\": false,\n        \"upload_date\": \"2024-06-15T09:00:00\"\n    }\n]"
+						}
+					]
+				},
+				{
+					"name": "Delete Category (via Proxy)",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{client_url}}/categories/{{category_id}}",
+							"host": [
+								"{{client_url}}"
+							],
+							"path": [
+								"categories",
+								"{{category_id}}"
+							]
+						},
+						"description": "(Proxy) Delete a category."
+					},
+					"response": [
+						{
 							"name": "200 — Updated",
 							"originalRequest": {
 								"method": "PUT",
@@ -2188,81 +2302,6 @@
 										"value": "application/json"
 									}
 								],
-								"url": {
-									"raw": "{{client_url}}/categories/bad_id",
-									"host": [
-										"{{client_url}}"
-									],
-									"path": [
-										"categories",
-										"bad_id"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n    \"detail\": \"Category not found\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Delete Category (via Proxy)",
-					"request": {
-						"method": "DELETE",
-						"url": {
-							"raw": "{{client_url}}/categories/{{category_id}}",
-							"host": [
-								"{{client_url}}"
-							],
-							"path": [
-								"categories",
-								"{{category_id}}"
-							]
-						},
-						"description": "(Proxy) Delete a category."
-					},
-					"response": [
-						{
-							"name": "200 — Deleted",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{client_url}}/categories/{{category_id}}",
-									"host": [
-										"{{client_url}}"
-									],
-									"path": [
-										"categories",
-										"{{category_id}}"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n    \"message\": \"Category a1b2c3d4e5f6 deleted\"\n}"
-						},
-						{
-							"name": "404 — Not Found",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
 								"url": {
 									"raw": "{{client_url}}/categories/bad_id",
 									"host": [
@@ -3004,6 +3043,12 @@
 									"description": "Optional. JSON array of category IDs."
 								},
 								{
+									"key": "document_ids",
+									"value": "[\"{{document_id}}\"]",
+									"type": "text",
+									"description": "Optional. JSON array of document IDs."
+								},
+								{
 									"key": "top_k",
 									"value": "5",
 									"type": "text",
@@ -3055,6 +3100,12 @@
 											"value": "[\"{{category_id}}\"]",
 											"type": "text",
 											"description": "Optional. JSON array of category IDs."
+										},
+										{
+											"key": "document_ids",
+											"value": "[\"{{document_id}}\"]",
+											"type": "text",
+											"description": "Optional. JSON array of document IDs."
 										},
 										{
 											"key": "top_k",

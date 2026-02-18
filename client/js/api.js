@@ -190,6 +190,12 @@ class Api {
         return evtSource;
     }
 
+    static async listDocumentsByCategory(categoryId) {
+        const res = await fetch(`${API_BASE}/categories/${categoryId}/documents`);
+        if (!res.ok) throw new Error('Failed to fetch documents');
+        return res.json();
+    }
+
     // --- Chat ---
     static async listChats() {
         const res = await fetch(`${API_BASE}/chat`);
@@ -211,12 +217,15 @@ class Api {
         return res.json();
     }
 
-    static async sendMessage(message, chatId, categoryIds = [], images = []) {
+    static async sendMessage(message, chatId, categoryIds = [], documentIds = [], images = []) {
         const formData = new FormData();
         formData.append('message', message);
         if (chatId) formData.append('chat_id', chatId);
         if (categoryIds && categoryIds.length > 0) {
             formData.append('category_ids', JSON.stringify(categoryIds));
+        }
+        if (documentIds && documentIds.length > 0) {
+            formData.append('document_ids', JSON.stringify(documentIds));
         }
 
         // Attach image files
@@ -243,12 +252,15 @@ class Api {
      * @param {function} onDone   - called with final metadata object
      * @param {function} onError  - called on error
      */
-    static async sendMessageStream(message, chatId, categoryIds = [], images = [], onToken, onDone, onError) {
+    static async sendMessageStream(message, chatId, categoryIds = [], documentIds = [], images = [], onToken, onDone, onError) {
         const formData = new FormData();
         formData.append('message', message);
         if (chatId) formData.append('chat_id', chatId);
         if (categoryIds && categoryIds.length > 0) {
             formData.append('category_ids', JSON.stringify(categoryIds));
+        }
+        if (documentIds && documentIds.length > 0) {
+            formData.append('document_ids', JSON.stringify(documentIds));
         }
         if (images && images.length > 0) {
             images.forEach(img => formData.append('images', img));

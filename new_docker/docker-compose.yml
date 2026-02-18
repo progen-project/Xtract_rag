@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # MongoDB for document/category metadata
+  mongo:
+    image: mongo:latest
+    container_name: petrorag_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - petrorag_infra_network
+    restart: unless-stopped
+
+  # Qdrant for vector storage
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: petrorag_qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - petrorag_infra_network
+    restart: unless-stopped
+
+  # Redis for caching
+  redis:
+    image: redis:alpine
+    container_name: petrorag_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - petrorag_infra_network
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+  qdrant_data:
+  redis_data:
+
+networks:
+  petrorag_infra_network:
+    driver: bridge

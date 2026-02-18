@@ -116,6 +116,18 @@ categories = {
             ]
         },
         {
+            "name": "List Category Documents (Light)",
+            "request": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/categories/{{category_id}}/documents", "host": ["{{base_url}}"], "path": ["categories", "{{category_id}}", "documents"]},
+                "description": "Get a lightweight list of documents in a category (ID, filename, status)."
+            },
+            "response": [
+                ex("200 — Success", "GET", "{{base_url}}/categories/{{category_id}}/documents", "{{base_url}}", ["categories", "{{category_id}}", "documents"],
+                   body=json.dumps([{"document_id": "d1", "filename": "doc.pdf", "status": "completed", "is_daily": False, "upload_date": "2024-06-15T09:00:00"}], indent=4))
+            ]
+        },
+        {
             "name": "Update Category",
             "request": {
                 "method": "PUT", "header": json_header(),
@@ -386,6 +398,7 @@ chat_form = [
     {"key": "message", "value": "What is the total depth of the well?", "type": "text", "description": "Required. User's question."},
     {"key": "chat_id", "value": "", "type": "text", "description": "Optional. Existing chat session ID.", "disabled": True},
     {"key": "category_ids", "value": '[\"{{category_id}}\"]', "type": "text", "description": "Optional. JSON array of category IDs."},
+    {"key": "document_ids", "value": '[\"{{document_id}}\"]', "type": "text", "description": "Optional. JSON array of document IDs."},
     {"key": "top_k", "value": "5", "type": "text", "description": "Chunks to retrieve (1-20, default 5)."},
     {"key": "images", "type": "file", "description": "Optional. Image files (max 10).", "src": [], "disabled": True}
 ]
@@ -435,6 +448,7 @@ chat_section = {
                 "body": {"mode": "formdata", "formdata": [
                     {"key": "message", "value": "Summarize the uploaded documents", "type": "text"},
                     {"key": "category_ids", "value": '[\"{{category_id}}\"]', "type": "text"},
+                    {"key": "document_ids", "value": '[\"{{document_id}}\"]', "type": "text"},
                     {"key": "top_k", "value": "5", "type": "text"}
                 ]},
                 "url": {"raw": "{{base_url}}/chat/stream", "host": ["{{base_url}}"], "path": ["chat", "stream"]},
