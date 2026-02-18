@@ -83,6 +83,19 @@ async def download_document(document_id: str):
         }
     )
 
+@router.get("/documents/{document_id}/view", tags=["Documents"])
+async def view_document(document_id: str):
+    """Serve PDF inline for in-browser viewing (supports #page=N)."""
+    stream, filename, content_type = await rag_service.download_document(document_id)
+    
+    return StreamingResponse(
+        stream,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"'
+        }
+    )
+
 @router.delete("/documents/cleanup/daily", tags=["Documents"])
 async def cleanup_daily():
     return await rag_service.cleanup_daily()
@@ -157,6 +170,55 @@ async def send_message(
             image_files.append(('images', (img.filename, content, img.content_type)))
         
     return await rag_service.send_message(request, image_files)
+
+@router.post("/chat/stream", tags=["Chat"])
+async def stream_message(
+    message: str = Form(...),
+    chat_id: Optional[str] = Form(None),
+    category_ids: Optional[str] = Form(None),
+    top_k: int = Form(5),
+    images: List[UploadFile] = File(default=[])
+):
+    """
+    Proxy streaming chat to main API.
+    Returns Server-Sent Events with word-by-word response tokens.
+    """
+    # Build form data for backend
+    data = {"message": message, "top_k": str(top_k)}
+    if chat_id:
+        data["chat_id"] = chat_id
+    if category_ids:
+        data["category_ids"] = category_ids
+
+    # Read image files
+    files = []
+    for img in images:
+        content = await img.read()
+        if img.filename:
+            files.append(("images", (img.filename, content, img.content_type)))
+
+    async def proxy_stream():
+        async with await rag_service._get_client() as client:
+            async with client.stream(
+                "POST",
+                "/chat/stream",
+                data=data,
+                files=files if files else None,
+                timeout=None
+            ) as response:
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        yield line + "\n\n"
+
+    return StreamingResponse(
+        proxy_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 # --- Query ---
 @router.post("/query", response_model=QueryResponse, tags=["Query"])

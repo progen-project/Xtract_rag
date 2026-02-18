@@ -71,6 +71,15 @@ class LLMService:
 Use only the information from the context to answer questions.
 If the context doesn't contain relevant information, say so.
 
+FORMATTING RULES (CRITICAL):
+- Structure your answer with markdown: use ## headers to organize major sections
+- Use **bold** for key terms, values, and important findings
+- Use bullet points (- ) for listing multiple items, factors, or properties
+- Use numbered lists (1. 2. 3.) for sequential steps, ranked items, or procedures
+- Use tables (| col | col |) when comparing data or presenting structured information
+- Keep paragraphs short (2-3 sentences max)
+- Start with a brief 1-2 sentence summary, then provide detailed sections
+
 CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
 1. After EVERY claim, fact, or piece of information in your answer, you MUST add an inline citation.
 2. Use this EXACT format: [Source N, Page X-Y] where N is the source number and X-Y is the page range.
@@ -93,8 +102,8 @@ Example format:
             response = await self.client.chat.completions.create(
                 model=self.text_model,
                 messages=messages,
-                temperature=0.7,
-                max_tokens=2000
+                temperature=0.0,
+                max_tokens=5000
             )
             
             return response.choices[0].message.content
@@ -206,6 +215,15 @@ Example format:
         # ==========================================
         system_content = """You are a helpful assistant that answers questions based on both text context and images.
 
+FORMATTING RULES (CRITICAL):
+- Structure your answer with markdown: use ## headers to organize major sections
+- Use **bold** for key terms, values, and important findings
+- Use bullet points (- ) for listing multiple items, factors, or properties
+- Use numbered lists (1. 2. 3.) for sequential steps, ranked items, or procedures
+- Use tables (| col | col |) when comparing data or presenting structured information
+- Keep paragraphs short (2-3 sentences max)
+- Start with a brief 1-2 sentence summary, then provide detailed sections
+
 CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
 1. After EVERY claim, fact, or piece of information in your answer, you MUST add an inline citation.
 2. Use this EXACT format: [Source N, Page X-Y] where N is the source number and X-Y is the page range.
@@ -294,8 +312,8 @@ Example format:
                 response = await self.client.chat.completions.create(
                     model=self.vision_model,
                     messages=messages,
-                    temperature=0.7,
-                    max_tokens=2000
+                    temperature=0.0,
+                    max_tokens=5000
                 )
                 
                 answer = response.choices[0].message.content
@@ -341,8 +359,8 @@ Example format:
                         "content": f"{fallback_context}\n\nQuestion: {query}"
                     }
                 ],
-                temperature=0.7,
-                max_tokens=2000
+                temperature=0.0,
+                max_tokens=5000
             )
             
             answer = response.choices[0].message.content
@@ -406,8 +424,8 @@ Example format:
             stream = await self.client.chat.completions.create(
                 model=self.text_model,
                 messages=messages,
-                temperature=0.7,
-                max_tokens=2000,
+                temperature=0.0,
+                max_tokens=5000,
                 stream=True
             )
             async for chunk in stream:
@@ -479,6 +497,15 @@ Example format:
 
         system_content = """You are a helpful assistant that answers questions based on both text context and images.
 
+FORMATTING RULES (CRITICAL):
+- Structure your answer with markdown: use ## headers to organize major sections
+- Use **bold** for key terms, values, and important findings
+- Use bullet points (- ) for listing multiple items, factors, or properties
+- Use numbered lists (1. 2. 3.) for sequential steps, ranked items, or procedures
+- Use tables (| col | col |) when comparing data or presenting structured information
+- Keep paragraphs short (2-3 sentences max)
+- Start with a brief 1-2 sentence summary, then provide detailed sections
+
 CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
 1. After EVERY claim, fact, or piece of information in your answer, you MUST add an inline citation.
 2. Use this EXACT format: [Source N, Page X-Y] where N is the source number and X-Y is the page range.
@@ -532,8 +559,8 @@ Example format:
                 stream = await self.client.chat.completions.create(
                     model=self.vision_model,
                     messages=messages,
-                    temperature=0.7,
-                    max_tokens=2000,
+                    temperature=0.0,
+                    max_tokens=5000,
                     stream=True
                 )
                 async for chunk in stream:
@@ -552,8 +579,8 @@ Example format:
                     {"role": "system", "content": system_content},
                     {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {query}"}
                 ],
-                temperature=0.7,
-                max_tokens=2000,
+                temperature=0.0,
+                max_tokens=5000,
                 stream=True
             )
             async for chunk in stream:
@@ -656,8 +683,8 @@ Example format:
             response = await self.client.chat.completions.create(
                 model=self.vision_model,
                 messages=messages,
-                temperature=0.5,
-                max_tokens=1000
+                temperature=0.0,
+                max_tokens=5000
             )
             
             return response.choices[0].message.content

@@ -115,6 +115,15 @@ class Api {
      * Download a document with the correct filename.
      * Uses fetch + blob to bypass cross-origin download attribute limitations.
      */
+    /**
+     * Open a document in a new browser tab at a specific page.
+     * Uses the PDF viewer's #page=N anchor.
+     */
+    static viewDocumentAtPage(documentId, page) {
+        const url = `${API_BASE}/documents/${documentId}/view#page=${page}`;
+        window.open(url, '_blank');
+    }
+
     static async downloadDocumentBlob(documentId, suggestedFilename) {
         const res = await fetch(`${API_BASE}/documents/${documentId}/download`);
         if (!res.ok) throw new Error('Download failed');
@@ -246,7 +255,7 @@ class Api {
         }
 
         try {
-            const res = await fetch(`${BACKEND_BASE}/api/chat/stream`, {
+            const res = await fetch(`${API_BASE}/chat/stream`, {
                 method: 'POST',
                 body: formData
             });

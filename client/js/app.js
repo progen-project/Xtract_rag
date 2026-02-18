@@ -647,7 +647,9 @@ function renderMessageContent(msg) {
             (match, filename, pageRange) => {
                 const citation = citationLookup[filename];
                 if (citation && citation.document_id) {
-                    return `<a href="#" onclick="event.preventDefault(); downloadDocument('${citation.document_id}', '${filename.replace(/'/g, "\\\'")}')" class="inline-citation" title="${filename} — Page ${pageRange}">`
+                    // Extract first page number for direct navigation
+                    const firstPage = parseInt(pageRange.split(/[-–]/)[0]) || 1;
+                    return `<a href="#" onclick="event.preventDefault(); Api.viewDocumentAtPage('${citation.document_id}', ${firstPage})" class="inline-citation" title="Open ${filename} at page ${firstPage}">`
                          + `<i class="fa-solid fa-file-pdf"></i> ${filename}, p.${pageRange}</a>`;
                 }
                 // No matching citation data — still style it
@@ -670,8 +672,8 @@ function renderMessageContent(msg) {
             (match, filename, pageRange) => {
                 const docId = filenameToDid[filename];
                 if (docId) {
-                    return `<a href="#" onclick="event.preventDefault(); downloadDocument('${docId}', '${filename.replace(/'/g, "\\'")}')"
-                               class="inline-citation" title="${filename} — Page ${pageRange}">`
+                    const firstPage = parseInt(pageRange.split(/[-–]/)[0]) || 1;
+                    return `<a href="#" onclick="event.preventDefault(); Api.viewDocumentAtPage('${docId}', ${firstPage})" class="inline-citation" title="Open ${filename} at page ${firstPage}">`
                          + `<i class="fa-solid fa-file-pdf"></i> ${filename}, p.${pageRange}</a>`;
                 }
                 return `<span class="inline-citation"><i class="fa-solid fa-file-lines"></i> ${filename}, p.${pageRange}</span>`;
@@ -716,11 +718,23 @@ function renderMessageContent(msg) {
                     if (sourceData.filename) filename = sourceData.filename;
                 }
 
-                const pageStr = Array.isArray(pages) ? pages.join(', ') : pages;
-
-                html += `<a href="#" onclick="event.preventDefault(); downloadDocument('${docId}', '${filename.replace(/'/g, "\\\'")}')" class="source-item" title="Download ${filename}">
-                            <i class="fa-solid fa-file-pdf"></i> ${filename} (p. ${pageStr})
-                         </a>`;
+                html += `<div class="source-item">
+                    <i class="fa-solid fa-file-pdf"></i> 
+                    <span class="source-filename">${filename}</span>
+                    <span class="source-pages">`;
+                
+                // Each page becomes a clickable link
+                if (Array.isArray(pages) && pages.length > 0) {
+                    pages.forEach((p, i) => {
+                        html += `<a href="#" onclick="event.preventDefault(); Api.viewDocumentAtPage('${docId}', ${p})" class="page-link" title="Open page ${p}">p.${p}</a>`;
+                        if (i < pages.length - 1) html += ' ';
+                    });
+                }
+                html += `</span>
+                    <a href="#" onclick="event.preventDefault(); downloadDocument('${docId}', '${filename.replace(/'/g, "\\\'")}')" class="source-download" title="Download ${filename}">
+                        <i class="fa-solid fa-download"></i>
+                    </a>
+                </div>`;
             });
         }
 
