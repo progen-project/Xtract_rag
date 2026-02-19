@@ -19,6 +19,7 @@ async def chat(
     message: str = Form(...),
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
+    document_ids: Optional[str] = Form(None),
     top_k: int = Form(5),
     images: List[UploadFile] = File(default=[]),
     controller: ChatController = Depends(get_chat_controller)
@@ -29,6 +30,7 @@ async def chat(
     - **message**: User's text message
     - **chat_id**: Optional existing chat ID
     - **category_ids**: Optional JSON array of category IDs
+    - **document_ids**: Optional JSON array of document IDs
     - **images**: Optional image files (max 10)
     """
     # Parse category_ids
@@ -36,12 +38,20 @@ async def chat(
     if category_ids:
         try:
             parsed_category_ids = json.loads(category_ids)
-            # Handle case where user sends a single quoted string '"val"' -> 'val'
             if isinstance(parsed_category_ids, str):
                 parsed_category_ids = [parsed_category_ids]
         except json.JSONDecodeError:
-            # Fallback: treat as comma-separated string
             parsed_category_ids = [cid.strip() for cid in category_ids.split(",") if cid.strip()]
+    
+    # Parse document_ids
+    parsed_document_ids = None
+    if document_ids:
+        try:
+            parsed_document_ids = json.loads(document_ids)
+            if isinstance(parsed_document_ids, str):
+                parsed_document_ids = [parsed_document_ids]
+        except json.JSONDecodeError:
+            parsed_document_ids = [did.strip() for did in document_ids.split(",") if did.strip()]
     
     # Save images
     image_paths = []
@@ -49,13 +59,16 @@ async def chat(
         temp_chat_id = chat_id or f"temp_{__import__('uuid').uuid4().hex[:12]}"
         image_paths = await controller.save_uploaded_images(images, temp_chat_id)
     
-    return await controller.send_message(
+    response = await controller.send_message(
         message=message,
         chat_id=chat_id,
         category_ids=parsed_category_ids,
+        document_ids=parsed_document_ids,
         image_paths=image_paths,
         top_k=top_k
     )
+    
+    return response
 
 
 @router.post("/stream")
@@ -63,6 +76,7 @@ async def chat_stream(
     message: str = Form(...),
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
+    document_ids: Optional[str] = Form(None),
     top_k: int = Form(5),
     images: List[UploadFile] = File(default=[]),
     controller: ChatController = Depends(get_chat_controller)
@@ -87,6 +101,16 @@ async def chat_stream(
         except json.JSONDecodeError:
             parsed_category_ids = [cid.strip() for cid in category_ids.split(",") if cid.strip()]
 
+    # Parse document_ids
+    parsed_document_ids = None
+    if document_ids:
+        try:
+            parsed_document_ids = json.loads(document_ids)
+            if isinstance(parsed_document_ids, str):
+                parsed_document_ids = [parsed_document_ids]
+        except json.JSONDecodeError:
+            parsed_document_ids = [did.strip() for did in document_ids.split(",") if did.strip()]
+
     # Save images
     image_paths = []
     if images and images[0].filename:
@@ -98,6 +122,7 @@ async def chat_stream(
             message=message,
             chat_id=chat_id,
             category_ids=parsed_category_ids,
+            document_ids=parsed_document_ids,
             image_paths=image_paths,
             top_k=top_k
         ),

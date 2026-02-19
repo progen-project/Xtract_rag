@@ -29,6 +29,8 @@ class ChatSession(BaseModel):
     """Chat Session Metadata."""
     chat_id: str = Field(..., description="Unique chat session ID")
     title: Optional[str] = Field(None, description="Chat title/summary")
+    category_ids: Optional[List[str]] = Field(None, description="Linked category IDs")
+    document_ids: Optional[List[str]] = Field(None, description="Linked document IDs")
     created_at: datetime = Field(..., description="Creation timestamp")
     messages: List[ChatMessage] = Field(default=[], description="Chat history")
 
@@ -38,6 +40,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="User message")
     chat_id: Optional[str] = Field(None, description="Existing chat ID")
     category_ids: Optional[List[str]] = Field(None, description="Filter by categories")
+    document_ids: Optional[List[str]] = Field(None, description="Filter by documents")
     top_k: int = Field(5, description="Number of context chunks to retrieve")
 
 

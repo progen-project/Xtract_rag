@@ -6,9 +6,9 @@ Thin router that delegates to CategoryController.
 from fastapi import APIRouter, Depends
 from typing import List
 
-from app.core.dependencies import get_category_controller
-from app.controllers import CategoryController
-from app.schemas import CategoryCreate, CategoryUpdate, CategoryResponse
+from app.core.dependencies import get_category_controller, get_document_controller
+from app.controllers import CategoryController, DocumentController
+from app.schemas import CategoryCreate, CategoryUpdate, CategoryResponse, DocumentMetadata
 
 router = APIRouter(prefix="/api/categories", tags=["Categories"])
 
@@ -19,13 +19,16 @@ async def create_category(
     controller: CategoryController = Depends(get_category_controller)
 ):
     """Create a new category."""
-    return await controller.create_category(request)
+    category = await controller.create_category(request)
+    return category
 
 
 @router.get("", response_model=List[CategoryResponse])
 async def list_categories(
     controller: CategoryController = Depends(get_category_controller)
 ):
+    """List all categories."""
+    """List all categories."""
     """List all categories."""
     return await controller.list_categories()
 
@@ -35,6 +38,7 @@ async def get_category(
     category_id: str,
     controller: CategoryController = Depends(get_category_controller)
 ):
+    """Get a specific category."""
     """Get a specific category."""
     return await controller.get_category(category_id)
 
@@ -46,11 +50,12 @@ async def update_category(
     controller: CategoryController = Depends(get_category_controller)
 ):
     """Update a category (Rename/Description)."""
-    return await controller.update_category(
+    category = await controller.update_category(
         category_id, 
         name=request.name, 
         description=request.description
     )
+    return category
 
 
 @router.delete("/{category_id}")
@@ -59,5 +64,16 @@ async def delete_category(
     controller: CategoryController = Depends(get_category_controller)
 ):
     """Delete a category."""
+    """Delete a category."""
     await controller.delete_category(category_id)
     return {"message": f"Category {category_id} deleted"}
+
+
+@router.get("/{category_id}/documents", response_model=List[DocumentMetadata])
+async def list_category_documents(
+    category_id: str,
+    doc_controller: DocumentController = Depends(get_document_controller)
+):
+    """List all documents in a specific category."""
+    """List all documents in a specific category."""
+    return await doc_controller.list_documents(category_id)

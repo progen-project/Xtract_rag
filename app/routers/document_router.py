@@ -88,7 +88,7 @@ async def upload_document(
     
     if not responses and files:
          raise HTTPException(status_code=400, detail="No valid PDF files found in batch")
-
+    
     return responses
 
 
@@ -182,7 +182,8 @@ async def cleanup_daily_uploads(
     Delete all documents older than 24 hours.
     Removes traces from MongoDB, Qdrant, and disk.
     """
-    return await controller.cleanup_daily_uploads()
+    result = await controller.cleanup_daily_uploads()
+    return result
 
 
 @router.delete("/{document_id}/burn")

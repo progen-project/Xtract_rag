@@ -1,22 +1,23 @@
+version: "3.9"
+
 services:
-  # ==============================
-  # Main RAG API (Internal Only)
-  # ==============================
+
+  # ==================================
+  # API
+  # ==================================
   api:
     build: .
     container_name: petrorag_api
     expose:
       - "8000"
-    ports:
-      - "8000:8000"
     depends_on:
       - mongo
       - qdrant
     env_file:
       - .env
     environment:
-      - MONGODB_URI=mongodb://mongo:27017
-      - QDRANT_URL=http://qdrant:6333
+      MONGODB_URI: mongodb://mongo:27017
+      QDRANT_URL: http://qdrant:6333
     volumes:
       - ./uploads:/app/uploads
       - ./active_docs:/app/active_docs
@@ -26,42 +27,25 @@ services:
       - petrorag_network
     restart: unless-stopped
 
-  # ==============================
-  # MongoDB (Internal Only)
-  # ==============================
-  mongo:
-    image: mongo:latest
-    container_name: petrorag_mongo
+
+  # ==================================
+  # Redis (Cache Layer)
+  # ==================================
+  redis:
+    image: redis:7-alpine
+    container_name: petrorag_redis
     expose:
-      - "27017"
-    ports:
-      - "27017:27017"
+      - "6379"
     volumes:
-      - mongo_data:/data/db
+      - redis_data:/data
     networks:
       - petrorag_network
     restart: unless-stopped
 
-  # ==============================
-  # Qdrant (Internal Only)
-  # ==============================
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: petrorag_qdrant
-    expose:
-      - "6333"
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    networks:
-      - petrorag_network
-    restart: unless-stopped
 
-  # ==============================
-  # Python Client Proxy (Internal Only)
-  # ==============================
+  # ==================================
+  # Client Proxy (Uses Redis + API)
+  # ==================================
   client_proxy:
     build:
       context: .
@@ -69,19 +53,51 @@ services:
     container_name: petrorag_client_proxy
     expose:
       - "8001"
-    ports:
-      - "8001:8001"
     depends_on:
       - api
+      - redis
     environment:
-      - RAG_API_URL=http://api:8000/api
+      RAG_API_URL: http://api:8000/api
+      REDIS_URL: redis://redis:6379/0
     networks:
       - petrorag_network
     restart: unless-stopped
 
-  # ==============================
-  # NGINX Gateway (Public Entry)
-  # ==============================
+
+  # ==================================
+  # MongoDB
+  # ==================================
+  mongo:
+    image: mongo:6
+    container_name: petrorag_mongo
+    expose:
+      - "27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - petrorag_network
+    restart: unless-stopped
+
+
+  # ==================================
+  # Qdrant
+  # ==================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: petrorag_qdrant
+    expose:
+      - "6333"
+      - "6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - petrorag_network
+    restart: unless-stopped
+
+
+  # ==================================
+  # NGINX Gateway
+  # ==================================
   nginx:
     image: nginx:alpine
     container_name: petrorag_gateway
@@ -93,15 +109,16 @@ services:
       - ./extracted_images:/usr/share/nginx/images/extracted_images:ro
       - ./chat_images:/usr/share/nginx/images/chat_images:ro
     depends_on:
-      - api
       - client_proxy
     networks:
       - petrorag_network
     restart: unless-stopped
 
+
 volumes:
   mongo_data:
   qdrant_data:
+  redis_data:
 
 networks:
   petrorag_network:

@@ -182,6 +182,9 @@ class RAGClientService:
         if request.category_ids:
             data["category_ids"] = json.dumps(request.category_ids)
 
+        if request.document_ids:
+            data["document_ids"] = json.dumps(request.document_ids)
+
         files = images if images else []
 
         async with await self._get_client() as client:

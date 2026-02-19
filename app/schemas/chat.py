@@ -31,6 +31,7 @@ class ChatSession(BaseModel):
     """A chat session with message history."""
     chat_id: str
     category_ids: Optional[List[str]] = None
+    document_ids: Optional[List[str]] = None
     messages: List[ChatMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -41,6 +42,7 @@ class ChatRequest(BaseModel):
     chat_id: Optional[str] = None
     message: str
     category_ids: Optional[List[str]] = None
+    document_ids: Optional[List[str]] = None
     top_k: int = Field(default=5, ge=1, le=20)
 
 
