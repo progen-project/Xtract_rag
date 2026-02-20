@@ -399,7 +399,6 @@ chat_form = [
     {"key": "chat_id", "value": "", "type": "text", "description": "Optional. Existing chat session ID.", "disabled": True},
     {"key": "category_ids", "value": '[\"{{category_id}}\"]', "type": "text", "description": "Optional. JSON array of category IDs."},
     {"key": "document_ids", "value": '[\"{{document_id}}\"]', "type": "text", "description": "Optional. JSON array of document IDs."},
-    {"key": "top_k", "value": "5", "type": "text", "description": "Chunks to retrieve (1-20, default 5)."},
     {"key": "images", "type": "file", "description": "Optional. Image files (max 10).", "src": [], "disabled": True}
 ]
 
@@ -431,7 +430,7 @@ chat_section = {
                 "method": "POST",
                 "body": {"mode": "formdata", "formdata": chat_form},
                 "url": {"raw": "{{base_url}}/chat", "host": ["{{base_url}}"], "path": ["chat"]},
-                "description": "Send a message (multipart/form-data for image support).\n\n**Form Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `message` | string | ✅ | User's question |\n| `chat_id` | string | ❌ | Continue existing chat |\n| `category_ids` | JSON string | ❌ | `'[\"id1\",\"id2\"]'` |\n| `top_k` | int | ❌ | Chunks (default 5) |\n| `images` | file[] | ❌ | Image attachments |\n\n**Response:** `ChatResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID (save this!) |\n| `message_id` | string | Message ID |\n| `answer` | string | AI response with inline citations |\n| `sources` | dict | `{doc_id: {filename, pages[]}}` |\n| `inline_citations` | InlineCitation[] | `[{source_number, document_id, filename, section_title, pages[]}]` |\n| `image_results` | ImageSearchResult[] | Retrieved images |"
+                "description": "Send a message (multipart/form-data for image support).\n\n**Form Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `message` | string | ✅ | User's question |\n| `chat_id` | string | ❌ | Continue existing chat |\n| `category_ids` | JSON string | ❌ | `'[\"id1\",\"id2\"]'` |\n| `images` | file[] | ❌ | Image attachments |\n\n**Response:** `ChatResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID (save this!) |\n| `message_id` | string | Message ID |\n| `answer` | string | AI response with inline citations |\n| `sources` | dict | `{doc_id: {filename, pages[]}}` |\n| `inline_citations` | InlineCitation[] | `[{source_number, document_id, filename, section_title, pages[]}]` |\n| `image_results` | ImageSearchResult[] | Retrieved images |"
             },
             "response": [
                 ex("200 — Success", "POST", "{{base_url}}/chat", "{{base_url}}", ["chat"],
@@ -448,8 +447,7 @@ chat_section = {
                 "body": {"mode": "formdata", "formdata": [
                     {"key": "message", "value": "Summarize the uploaded documents", "type": "text"},
                     {"key": "category_ids", "value": '[\"{{category_id}}\"]', "type": "text"},
-                    {"key": "document_ids", "value": '[\"{{document_id}}\"]', "type": "text"},
-                    {"key": "top_k", "value": "5", "type": "text"}
+                    {"key": "document_ids", "value": '[\"{{document_id}}\"]', "type": "text"}
                 ]},
                 "url": {"raw": "{{base_url}}/chat/stream", "host": ["{{base_url}}"], "path": ["chat", "stream"]},
                 "description": "**SSE streaming** chat. Returns word-by-word tokens then final metadata.\n\n**Same form fields as Send Message.**\n\n**Event format:**\n```\ndata: {\"token\": \"Based\"}\ndata: {\"token\": \" on\"}\n...\ndata: {\"done\": true, \"chat_id\": \"...\", \"message_id\": \"...\", \"answer\": \"...\", \"sources\": {...}, \"inline_citations\": [...], \"image_results\": [...]}\n```\n\n**Frontend:**\n```javascript\nconst response = await fetch('/api/chat/stream', {method: 'POST', body: formData});\nconst reader = response.body.getReader();\n// Read and parse each SSE line\n```"
@@ -544,32 +542,32 @@ query_section = {
             "name": "RAG Query",
             "request": {
                 "method": "POST", "header": json_header(),
-                "body": {"mode": "raw", "raw": json.dumps({"query": "What are the production statistics for Q3?", "category_ids": ["{{category_id}}"], "top_k": 5, "include_images": True, "include_tables": True}, indent=4)},
+                "body": {"mode": "raw", "raw": json.dumps({"query": "What are the production statistics for Q3?", "category_ids": ["{{category_id}}"], "include_images": True, "include_tables": True}, indent=4)},
                 "url": {"raw": "{{base_url}}/query", "host": ["{{base_url}}"], "path": ["query"]},
-                "description": "One-shot RAG query.\n\n**Request Body (JSON):**\n| Field | Type | Required | Default |\n|-------|------|----------|---------|\n| `query` | string | ✅ | — |\n| `category_ids` | string[] | ❌ | all |\n| `document_ids` | string[] | ❌ | all |\n| `top_k` | int (1-20) | ❌ | 5 |\n| `include_images` | bool | ❌ | true |\n| `include_tables` | bool | ❌ | true |\n\n**Response:** `QueryResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query` | string | Original query |\n| `answer` | string | AI answer |\n| `retrieved_chunks` | RetrievedChunk[] | Context chunks |\n| `sources` | string[] | Document IDs used |\n| `inline_citations` | dict[] | Structured citations |"
+                "description": "One-shot RAG query.\n\n**Request Body (JSON):**\n| Field | Type | Required | Default |\n|-------|------|----------|---------|\n| `query` | string | ✅ | — |\n| `category_ids` | string[] | ❌ | all |\n| `document_ids` | string[] | ❌ | all |\n| `include_images` | bool | ❌ | true |\n| `include_tables` | bool | ❌ | true |\n\n**Response:** `QueryResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query` | string | Original query |\n| `answer` | string | AI answer |\n| `retrieved_chunks` | RetrievedChunk[] | Context chunks |\n| `sources` | string[] | Document IDs used |\n| `inline_citations` | dict[] | Structured citations |"
             },
             "response": [
                 ex("200 — Success", "POST", "{{base_url}}/query", "{{base_url}}", ["query"],
                    body=query_resp, req_header=json_header(),
-                   req_body=json.dumps({"query": "What are the production statistics for Q3?", "top_k": 5})),
+                   req_body=json.dumps({"query": "What are the production statistics for Q3?"})),
                 ex("422 — Missing Query", "POST", "{{base_url}}/query", "{{base_url}}", ["query"],
                    status="Unprocessable Entity", code=422,
                    body=json.dumps({"detail": [{"loc": ["body", "query"], "msg": "field required", "type": "value_error.missing"}]}, indent=4),
-                   req_header=json_header(), req_body=json.dumps({"top_k": 5}))
+                   req_header=json_header(), req_body=json.dumps({}))
             ]
         },
         {
             "name": "Image Search",
             "request": {
                 "method": "POST", "header": json_header(),
-                "body": {"mode": "raw", "raw": json.dumps({"query_text": "production flowchart diagram", "category_ids": ["{{category_id}}"], "top_k": 5}, indent=4)},
+                "body": {"mode": "raw", "raw": json.dumps({"query_text": "production flowchart diagram", "category_ids": ["{{category_id}}"]}, indent=4)},
                 "url": {"raw": "{{base_url}}/query/image-search", "host": ["{{base_url}}"], "path": ["query", "image-search"]},
-                "description": "Search for images by text or image similarity.\n\n**Request Body (JSON):**\n| Field | Type | Required |\n|-------|------|----------|\n| `query_text` | string | ❌ (one of text/image required) |\n| `query_image_base64` | string | ❌ |\n| `category_ids` | string[] | ❌ |\n| `document_ids` | string[] | ❌ |\n| `top_k` | int (1-20) | ❌ (default 5) |\n\n**Response:** `ImageSearchResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query_text` | string? | Echo of input |\n| `has_query_image` | bool | Whether image was provided |\n| `results` | ImageSearchResult[] | Matched images |\n| `count` | int | Number of results |"
+                "description": "Search for images by text or image similarity.\n\n**Request Body (JSON):**\n| Field | Type | Required |\n|-------|------|----------|\n| `query_text` | string | ❌ (one of text/image required) |\n| `query_image_base64` | string | ❌ |\n| `category_ids` | string[] | ❌ |\n| `document_ids` | string[] | ❌ |\n\n**Response:** `ImageSearchResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query_text` | string? | Echo of input |\n| `has_query_image` | bool | Whether image was provided |\n| `results` | ImageSearchResult[] | Matched images |\n| `count` | int | Number of results |"
             },
             "response": [
                 ex("200 — Success", "POST", "{{base_url}}/query/image-search", "{{base_url}}", ["query", "image-search"],
                    body=img_search_resp, req_header=json_header(),
-                   req_body=json.dumps({"query_text": "production flowchart", "top_k": 5})),
+                   req_body=json.dumps({"query_text": "production flowchart"})),
                 ex("422 — Empty Request", "POST", "{{base_url}}/query/image-search", "{{base_url}}", ["query", "image-search"],
                    status="Unprocessable Entity", code=422,
                    body=json.dumps({"detail": "Either query_text or query_image_base64 must be provided"}, indent=4),
@@ -657,10 +655,10 @@ client_proxy = {
         # Query
         proxy_item("RAG Query", "POST", ["query"], "RAG query.",
                    [query_section["item"][0]["response"][0]], header=json_header(),
-                   body_obj=json.dumps({"query": "What are the key metrics?", "top_k": 5})),
+                   body_obj=json.dumps({"query": "What are the key metrics?"})),
         proxy_item("Image Search", "POST", ["query", "image-search"], "Image search.",
                    [query_section["item"][1]["response"][0]], header=json_header(),
-                   body_obj=json.dumps({"query_text": "flowchart", "top_k": 5})),
+                   body_obj=json.dumps({"query_text": "flowchart"})),
     ]
 }
 

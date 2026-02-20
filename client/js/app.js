@@ -880,12 +880,21 @@ function renderMessageContent(msg) {
         content = content.replace(
             /\[([^\[\]]+?\.\w{2,5}),\s*Page[s]?\s*([\d\-–]+)\]/g,
             (match, filename, pageRange) => {
-                const citation = citationLookup[filename];
+                // Handle potential HTML escaping from marked.parse
+                const unescapedFilename = filename
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'");
+                
+                const citation = citationLookup[unescapedFilename] || citationLookup[filename];
+                
                 if (citation && citation.document_id) {
                     // Extract first page number for direct navigation
                     const firstPage = parseInt(pageRange.split(/[-–]/)[0]) || 1;
-                    return `<a href="#" onclick="event.preventDefault(); Api.viewDocumentAtPage('${citation.document_id}', ${firstPage})" class="inline-citation" title="Open ${filename} at page ${firstPage}">`
-                         + `<i class="fa-solid fa-file-pdf"></i> ${filename}, p.${pageRange}</a>`;
+                    return `<a href="#" onclick="event.preventDefault(); Api.viewDocumentAtPage('${citation.document_id}', ${firstPage})" class="inline-citation" title="Open ${unescapedFilename} at page ${firstPage}">`
+                         + `<i class="fa-solid fa-file-pdf"></i> ${unescapedFilename}, p.${pageRange}</a>`;
                 }
                 // No matching citation data — still style it
                 return `<span class="inline-citation"><i class="fa-solid fa-file-lines"></i> ${filename}, p.${pageRange}</span>`;
@@ -905,11 +914,20 @@ function renderMessageContent(msg) {
         content = content.replace(
             /\[([^\[\]]+?\.\w{2,5}),\s*Page[s]?\s*([\d\-–]+)\]/g,
             (match, filename, pageRange) => {
-                const docId = filenameToDid[filename];
+                // Handle potential HTML escaping
+                const unescapedFilename = filename
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'");
+                
+                const docId = filenameToDid[unescapedFilename] || filenameToDid[filename];
+                
                 if (docId) {
                     const firstPage = parseInt(pageRange.split(/[-–]/)[0]) || 1;
-                    return `<a href="#" onclick="event.preventDefault(); Api.viewDocumentAtPage('${docId}', ${firstPage})" class="inline-citation" title="Open ${filename} at page ${firstPage}">`
-                         + `<i class="fa-solid fa-file-pdf"></i> ${filename}, p.${pageRange}</a>`;
+                    return `<a href="#" onclick="event.preventDefault(); Api.viewDocumentAtPage('${docId}', ${firstPage})" class="inline-citation" title="Open ${unescapedFilename} at page ${firstPage}">`
+                         + `<i class="fa-solid fa-file-pdf"></i> ${unescapedFilename}, p.${pageRange}</a>`;
                 }
                 return `<span class="inline-citation"><i class="fa-solid fa-file-lines"></i> ${filename}, p.${pageRange}</span>`;
             }

@@ -11,7 +11,6 @@ from python_client_app.schemas.chat import ChatRequest, ChatResponse, ChatSessio
 from python_client_app.schemas.document import DocumentResponse, UploadResponse, DocumentStatus
 from python_client_app.schemas.query import (
     QueryRequest, QueryResponse,
-    QueryRequest, QueryResponse,
     ImageSearchRequest, ImageSearchResponse,
 )
 from python_client_app.core.cache import category_cache, document_cache, chat_cache
@@ -128,11 +127,13 @@ async def download_document(document_id: str):
     """Proxy download with proper filename and content-type headers."""
     stream, filename, content_type = await rag_service.download_document(document_id)
     
+    from urllib.parse import quote
+    safe_filename = quote(filename)
     return StreamingResponse(
         stream,
         media_type=content_type,
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
+            "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{safe_filename}'
         }
     )
 
@@ -141,11 +142,13 @@ async def view_document(document_id: str):
     """Serve PDF inline for in-browser viewing (supports #page=N)."""
     stream, filename, content_type = await rag_service.download_document(document_id)
     
+    from urllib.parse import quote
+    safe_filename = quote(filename)
     return StreamingResponse(
         stream,
         media_type=content_type,
         headers={
-            "Content-Disposition": f'inline; filename="{filename}"'
+            "Content-Disposition": f'inline; filename="{filename}"; filename*=UTF-8\'\'{safe_filename}'
         }
     )
 
@@ -214,9 +217,8 @@ async def send_message(
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
     document_ids: Optional[str] = Form(None),
-    top_k: int = Form(5),
     images: List[UploadFile] = File(default=[])
-):
+) -> ChatResponse:
     """
     Proxy chat request. 
     Accepts Form data to match main API and allow efficient forwarding.
@@ -244,16 +246,12 @@ async def send_message(
         chat_id=chat_id,
         category_ids=parsed_category_ids,
         document_ids=parsed_document_ids,
-        top_k=top_k
     )
     
     # Process images for service
     image_files = []
     for img in images:
         content = await img.read()
-        if img.filename:  # Skip empty file inputs
-            image_files.append(('images', (img.filename, content, img.content_type)))
-        
         if img.filename:  # Skip empty file inputs
             image_files.append(('images', (img.filename, content, img.content_type)))
         
@@ -271,7 +269,6 @@ async def stream_message(
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
     document_ids: Optional[str] = Form(None),
-    top_k: int = Form(5),
     images: List[UploadFile] = File(default=[])
 ):
     """
@@ -279,7 +276,7 @@ async def stream_message(
     Returns Server-Sent Events with word-by-word response tokens.
     """
     # Build form data for backend
-    data = {"message": message, "top_k": str(top_k)}
+    data = {"message": message}
     if chat_id:
         data["chat_id"] = chat_id
     if category_ids:

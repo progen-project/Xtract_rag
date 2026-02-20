@@ -7,7 +7,6 @@
 			"query": { "type": "string", "required": true },
 			"category_ids": { "type": "string[]", "required": false, "description": "Filter to specific categories" },
 			"document_ids": { "type": "string[]", "required": false, "description": "Filter to specific documents" },
-			"top_k": { "type": "integer (1-20)", "required": false, "default": 5 },
 			"include_images": { "type": "boolean", "required": false, "default": true },
 			"include_tables": { "type": "boolean", "required": false, "default": true }
 		},
@@ -15,7 +14,6 @@
 			"query": "What are the production statistics for Q3?",
 			"category_ids": ["cat_a1b2c3d4e5f6"],
 			"document_ids": [],
-			"top_k": 5,
 			"include_images": true,
 			"include_tables": true
 		}
@@ -91,13 +89,11 @@
 			"query_text": { "type": "string | null", "required": false, "description": "Text query (at least one of query_text or query_image_base64 required)" },
 			"query_image_base64": { "type": "string | null", "required": false, "description": "Base64-encoded image for visual similarity search" },
 			"category_ids": { "type": "string[]", "required": false },
-			"document_ids": { "type": "string[]", "required": false },
-			"top_k": { "type": "integer (1-20)", "required": false, "default": 5 }
+			"document_ids": { "type": "string[]", "required": false }
 		},
 		"example": {
 			"query_text": "production flowchart diagram",
-			"category_ids": ["cat_a1b2c3d4e5f6"],
-			"top_k": 5
+			"category_ids": ["cat_a1b2c3d4e5f6"]
 		}
 	},
 

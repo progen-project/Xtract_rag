@@ -13,7 +13,9 @@ services:
       - .env
     environment:
       - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_URI=mongodb://mongo:27017
       - QDRANT_URL=http://qdrant:6333
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./uploads:/app/uploads
       - ./active_docs:/app/active_docs
@@ -41,6 +43,17 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    networks:
+      - petrorag_network
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    container_name: petrorag_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - petrorag_network
     restart: unless-stopped
@@ -74,6 +87,7 @@ services:
 volumes:
   mongo_data:
   qdrant_data:
+  redis_data:
 
 networks:
   petrorag_network:

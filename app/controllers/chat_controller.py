@@ -8,7 +8,7 @@ import logging
 import uuid
 import re
 from datetime import datetime
-
+from app.config.settings import get_settings
 from app.repositories import ChatRepository
 from app.schemas import (
     ChatMessage,
@@ -59,7 +59,7 @@ class ChatController:
         category_ids: Optional[List[str]] = None,
         document_ids: Optional[List[str]] = None,
         image_paths: Optional[List[str]] = None,
-        top_k: int = 10
+        top_k: int = get_settings().top_k
     ) -> ChatResponse:
         """
         Send a message and get a response.
@@ -231,6 +231,15 @@ class ChatController:
             answer, retrieved_chunks, sources
         )
         
+        # Intelligent Source Attachment: Filter sources to only those cited by the LLM
+        if not inline_citations:
+            logger.info("No citations found in answer. Clearing sources.")
+            sources = {}
+        else:
+            cited_doc_ids = {c["document_id"] for c in inline_citations}
+            sources = {doc_id: data for doc_id, data in sources.items() if doc_id in cited_doc_ids}
+            logger.info(f"Filtered sources: kept {len(sources)} cited documents.")
+        
         # ========================================
         # STEP 7: Create assistant message
         # ========================================
@@ -278,7 +287,7 @@ class ChatController:
         category_ids: Optional[List[str]] = None,
         document_ids: Optional[List[str]] = None,
         image_paths: Optional[List[str]] = None,
-        top_k: int = 10
+        top_k: int = get_settings().top_k
     ):
         """
         Streaming version of send_message.
@@ -336,6 +345,7 @@ class ChatController:
                     query_image_data = base64.b64encode(f.read()).decode()
             except:
                 pass
+
 
         search_results = self.search_service.search(
             query_text=message,
@@ -409,6 +419,15 @@ class ChatController:
         answer, inline_citations = self._enrich_inline_citations(
             full_answer, retrieved_chunks, sources
         )
+        
+        # Intelligent Source Attachment: Filter sources to only those cited by the LLM
+        if not inline_citations:
+            logger.info("No citations found in streaming answer. Clearing sources.")
+            sources = {}
+        else:
+            cited_doc_ids = {c["document_id"] for c in inline_citations}
+            sources = {doc_id: data for doc_id, data in sources.items() if doc_id in cited_doc_ids}
+            logger.info(f"Filtered sources: kept {len(sources)} cited documents.")
 
         # STEP 8: Save assistant message
         assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -494,9 +513,10 @@ class ChatController:
             
             return match.group(0)  # Keep original if source number not found
         
-        # Pattern: [Source N, Page X-Y] or [Source N, Pages X-Y]
+        # Flexible pattern for [Source N, Page X-Y] or variants like [Source N, p. X]
+        # Handles: Page, Pages, p., p, and various whitespace/separators
         enriched = re.sub(
-            r'\[Source\s+(\d+),\s*Pages?\s*([\d\-–]+)\]',
+            r'\[Source\s+(\d+),\s*(?:Pages?|p\.?)\s*([\d\-–]+)\]',
             replace_citation,
             answer
         )

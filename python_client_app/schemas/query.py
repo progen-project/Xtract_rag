@@ -11,7 +11,6 @@ class QueryRequest(BaseModel):
     query: str = Field(..., description="The search/query text")
     category_ids: Optional[List[str]] = Field(None, description="Filter by category IDs")
     document_ids: Optional[List[str]] = Field(None, description="Filter by document IDs")
-    top_k: int = Field(5, ge=1, le=20, description="Number of context chunks to retrieve")
     include_images: bool = Field(True, description="Include related images in results")
     include_tables: bool = Field(True, description="Include related tables in results")
 
@@ -42,7 +41,6 @@ class ImageSearchRequest(BaseModel):
     query_image_base64: Optional[str] = Field(None, description="Base64-encoded image to search by")
     category_ids: Optional[List[str]] = Field(None, description="Filter by categories")
     document_ids: Optional[List[str]] = Field(None, description="Filter by documents")
-    top_k: int = Field(5, ge=1, le=20, description="Number of results")
 
 
 class ImageSearchResult(BaseModel):

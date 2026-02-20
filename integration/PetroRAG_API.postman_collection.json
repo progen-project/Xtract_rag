@@ -1408,12 +1408,6 @@
 									"description": "Optional. JSON array of document IDs."
 								},
 								{
-									"key": "top_k",
-									"value": "5",
-									"type": "text",
-									"description": "Chunks to retrieve (1-20, default 5)."
-								},
-								{
 									"key": "images",
 									"type": "file",
 									"description": "Optional. Image files (max 10).",
@@ -1431,7 +1425,7 @@
 								"chat"
 							]
 						},
-						"description": "Send a message (multipart/form-data for image support).\n\n**Form Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `message` | string | ✅ | User's question |\n| `chat_id` | string | ❌ | Continue existing chat |\n| `category_ids` | JSON string | ❌ | `'[\"id1\",\"id2\"]'` |\n| `top_k` | int | ❌ | Chunks (default 5) |\n| `images` | file[] | ❌ | Image attachments |\n\n**Response:** `ChatResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID (save this!) |\n| `message_id` | string | Message ID |\n| `answer` | string | AI response with inline citations |\n| `sources` | dict | `{doc_id: {filename, pages[]}}` |\n| `inline_citations` | InlineCitation[] | `[{source_number, document_id, filename, section_title, pages[]}]` |\n| `image_results` | ImageSearchResult[] | Retrieved images |"
+						"description": "Send a message (multipart/form-data for image support).\n\n**Form Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `message` | string | ✅ | User's question |\n| `chat_id` | string | ❌ | Continue existing chat |\n| `category_ids` | JSON string | ❌ | `'[\"id1\",\"id2\"]'` |\n| `images` | file[] | ❌ | Image attachments |\n\n**Response:** `ChatResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID (save this!) |\n| `message_id` | string | Message ID |\n| `answer` | string | AI response with inline citations |\n| `sources` | dict | `{doc_id: {filename, pages[]}}` |\n| `inline_citations` | InlineCitation[] | `[{source_number, document_id, filename, section_title, pages[]}]` |\n| `image_results` | ImageSearchResult[] | Retrieved images |"
 					},
 					"response": [
 						{
@@ -1553,11 +1547,6 @@
 								{
 									"key": "document_ids",
 									"value": "[\"{{document_id}}\"]",
-									"type": "text"
-								},
-								{
-									"key": "top_k",
-									"value": "5",
 									"type": "text"
 								}
 							]
@@ -3047,12 +3036,6 @@
 									"value": "[\"{{document_id}}\"]",
 									"type": "text",
 									"description": "Optional. JSON array of document IDs."
-								},
-								{
-									"key": "top_k",
-									"value": "5",
-									"type": "text",
-									"description": "Chunks to retrieve (1-20, default 5)."
 								},
 								{
 									"key": "images",

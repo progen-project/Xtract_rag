@@ -95,6 +95,15 @@ class QueryController:
             answer, retrieved_chunks, sources_map
         )
         
+        # Intelligent Source Attachment: Filter sources to only those cited by the LLM
+        if not inline_citations:
+            logger.info("No citations found in Query. Clearing sources.")
+            sources = []
+        else:
+            cited_doc_ids = {c["document_id"] for c in inline_citations}
+            sources = [doc_id for doc_id in sources if doc_id in cited_doc_ids]
+            logger.info(f"Filtered sources: kept {len(sources)} cited documents.")
+        
         return QueryResponse(
             query=request.query,
             answer=answer,
@@ -150,8 +159,10 @@ class QueryController:
                 return f'[{info["filename"]}, Page {page_range}]'
             return match.group(0)
         
+        # Flexible pattern for [Source N, Page X-Y] or variants like [Source N, p. X]
+        # Handles: Page, Pages, p., p, and various whitespace/separators
         enriched = re.sub(
-            r'\[Source\s+(\d+),\s*Pages?\s*([\d\-–]+)\]',
+            r'\[Source\s+(\d+),\s*(?:Pages?|p\.?)\s*([\d\-–]+)\]',
             replace_citation,
             answer
         )

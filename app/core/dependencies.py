@@ -23,6 +23,7 @@ from app.services.llm_service import llm_service
 from app.services.pdf_parser import DoclingParser
 from app.services.chunker import SectionChunker
 from app.services.image_embedder import image_embedder
+from app.services.rerank_service import rerank_service
 
 
 from app.services.status import ProcessingStatusManager  # Added
@@ -56,6 +57,7 @@ class Container:
         self.pdf_parser = DoclingParser()
         self.chunker = SectionChunker()
         self.image_embedder = image_embedder
+        self.rerank_service = rerank_service
         self.status_manager = ProcessingStatusManager()  # Added status manager
     
     async def initialize(self) -> None:
@@ -82,6 +84,7 @@ class Container:
         # Initialize services
         self.indexer.initialize()
         self.llm.initialize()
+        self.rerank_service.initialize()
         
         # Initialize controllers
         self.category_controller = CategoryController(self.category_repo)

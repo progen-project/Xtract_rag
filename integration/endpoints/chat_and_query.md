@@ -34,8 +34,7 @@
 ```json
 {
   "query": "What are the risks?",
-  "category_ids": ["cat_finance"],
-  "top_k": 5
+  "category_ids": ["cat_finance"]
 }
 ```
 
@@ -55,8 +54,7 @@
 **Request**: `application/json`
 ```json
 {
-  "query_text": "pie chart of expenses",
-  "top_k": 3
+  "query_text": "pie chart of expenses"
 }
 ```
 
