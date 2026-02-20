@@ -86,6 +86,6 @@ class ResponseCache:
 
 
 # Global cache instances
-category_cache = ResponseCache(default_ttl=600)   # 10 minutes
-document_cache = ResponseCache(default_ttl=600)    # 10 minutes
-chat_cache = ResponseCache(default_ttl=600)        # 10 minutes
+category_cache = ResponseCache(default_ttl=60)   # 1 minutes
+document_cache = ResponseCache(default_ttl=60)    # 1 minutes
+chat_cache = ResponseCache(default_ttl=60)        # 1 minutes

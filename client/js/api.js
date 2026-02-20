@@ -11,8 +11,23 @@ const PORT_BACKEND = '8080';
 // If running on localhost, use distinct ports.
 // If deployed (e.g. via Nginx reverse proxy), these usually map to paths like /api or /client-api
 // But for this Docker setup where ports are exposed directly:
-const API_BASE = `${PROTOCOL}//${HOST}:${PORT_CLIENT}/client-api`;
-const BACKEND_BASE = `${PROTOCOL}//${HOST}:${PORT_BACKEND}`;
+// const API_BASE = `${PROTOCOL}//${HOST}:${PORT_CLIENT}/client-api`;
+// const BACKEND_BASE = `${PROTOCOL}//${HOST}:${PORT_BACKEND}`;
+
+// Docker on github code space :
+// function replacePortInHostname(hostname, newPort) {
+//   // Codespaces format: name-8002.app.github.dev
+//   return hostname.replace(/-\d+\.app\.github\.dev$/, `-${newPort}.app.github.dev`);
+// }
+
+// const API_HOST = replacePortInHostname(HOST, PORT_CLIENT);
+// const BACKEND_HOST = replacePortInHostname(HOST, PORT_BACKEND);
+
+// const API_BASE = `${PROTOCOL}//${API_HOST}/client-api`;
+// const BACKEND_BASE = `${PROTOCOL}//${BACKEND_HOST}`;
+
+const API_BASE = "/client-api";
+const BACKEND_BASE = "/api";
 
 class Api {
     /**
@@ -112,10 +127,6 @@ class Api {
     }
 
     /**
-     * Download a document with the correct filename.
-     * Uses fetch + blob to bypass cross-origin download attribute limitations.
-     */
-    /**
      * Open a document in a new browser tab at a specific page.
      * Uses the PDF viewer's #page=N anchor.
      */
@@ -123,6 +134,11 @@ class Api {
         const url = `${API_BASE}/documents/${documentId}/view#page=${page}`;
         window.open(url, '_blank');
     }
+    
+    /**
+     * Download a document with the correct filename.
+     * Uses fetch + blob to bypass cross-origin download attribute limitations.
+     */
 
     static async downloadDocumentBlob(documentId, suggestedFilename) {
         const res = await fetch(`${API_BASE}/documents/${documentId}/download`);
@@ -185,20 +201,35 @@ class Api {
 
     static streamBatchProgress(batchId, onMessage, onError) {
         const evtSource = new EventSource(`${API_BASE}/batches/${batchId}/progress`);
-
+        let batchCompleted = false;
+        
         evtSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
             onMessage(data);
+            
+            // ✅ تتبع لو الباتش خلص
+            if (data.type === 'initial_state') {
+                // initial state - مش خلص بعد
+            } else if (data.status === 'completed' || 
+                    data.status === 'failed' || 
+                    data.status === 'cancelled') {
+                batchCompleted = true;
+            }
         };
-
+        
         evtSource.onerror = (err) => {
-            console.error("EventSource failed:", err);
             evtSource.close();
-            if (onError) onError(err);
+            
+            // ✅ لو الباتش خلص، ده مش error حقيقي
+            if (!batchCompleted) {
+                console.error("EventSource failed:", err);
+                if (onError) onError(err);
+            }
         };
-
+        
         return evtSource;
     }
+
 
     static async listDocumentsByCategory(categoryId) {
         const res = await fetch(`${API_BASE}/categories/${categoryId}/documents`);
@@ -333,6 +364,7 @@ class Api {
         if (!res.ok) throw new Error('Query failed');
         return res.json();
     }
+
 
     static async searchImages(queryText = null, imageBase64 = null, categoryIds = null) {
         const body = {};
