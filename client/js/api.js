@@ -127,6 +127,10 @@ class Api {
     }
 
     /**
+     * Download a document with the correct filename.
+     * Uses fetch + blob to bypass cross-origin download attribute limitations.
+     */
+    /**
      * Open a document in a new browser tab at a specific page.
      * Uses the PDF viewer's #page=N anchor.
      */
@@ -134,11 +138,6 @@ class Api {
         const url = `${API_BASE}/documents/${documentId}/view#page=${page}`;
         window.open(url, '_blank');
     }
-    
-    /**
-     * Download a document with the correct filename.
-     * Uses fetch + blob to bypass cross-origin download attribute limitations.
-     */
 
     static async downloadDocumentBlob(documentId, suggestedFilename) {
         const res = await fetch(`${API_BASE}/documents/${documentId}/download`);
@@ -201,35 +200,20 @@ class Api {
 
     static streamBatchProgress(batchId, onMessage, onError) {
         const evtSource = new EventSource(`${API_BASE}/batches/${batchId}/progress`);
-        let batchCompleted = false;
-        
+
         evtSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
             onMessage(data);
-            
-            // ✅ تتبع لو الباتش خلص
-            if (data.type === 'initial_state') {
-                // initial state - مش خلص بعد
-            } else if (data.status === 'completed' || 
-                    data.status === 'failed' || 
-                    data.status === 'cancelled') {
-                batchCompleted = true;
-            }
         };
-        
+
         evtSource.onerror = (err) => {
+            console.error("EventSource failed:", err);
             evtSource.close();
-            
-            // ✅ لو الباتش خلص، ده مش error حقيقي
-            if (!batchCompleted) {
-                console.error("EventSource failed:", err);
-                if (onError) onError(err);
-            }
+            if (onError) onError(err);
         };
-        
+
         return evtSource;
     }
-
 
     static async listDocumentsByCategory(categoryId) {
         const res = await fetch(`${API_BASE}/categories/${categoryId}/documents`);
@@ -364,7 +348,6 @@ class Api {
         if (!res.ok) throw new Error('Query failed');
         return res.json();
     }
-
 
     static async searchImages(queryText = null, imageBase64 = null, categoryIds = null) {
         const body = {};
