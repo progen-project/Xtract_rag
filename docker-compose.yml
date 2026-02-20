@@ -5,7 +5,7 @@ services:
     build: .
     container_name: petrorag_api
     ports:
-      - "8000:8000"
+      - "8080:8080"
     depends_on:
       - mongo
       - qdrant
@@ -55,7 +55,7 @@ services:
     depends_on:
       - api
     environment:
-      - RAG_API_URL=http://api:8000/api
+      - RAG_API_URL=http://api:8080/api
     networks:
       - petrorag_network
     restart: unless-stopped

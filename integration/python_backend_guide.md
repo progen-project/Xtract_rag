@@ -29,7 +29,7 @@ class CategoryResponse(BaseModel):
 ```python
 import requests
 
-BASE_URL = "http://localhost:8000/api/categories"
+BASE_URL = "http://localhost:8080/api/categories"
 
 def create_category(name: str, desc: str = None):
     payload = {"name": name, "description": desc}
@@ -71,7 +71,7 @@ class DocumentUploadResponse(BaseModel):
 ```python
 import requests
 
-DOCS_URL = "http://localhost:8000/api/documents"
+DOCS_URL = "http://localhost:8080/api/documents"
 
 def upload_documents(category_id: str, file_paths: List[str]):
     url = f"{DOCS_URL}/upload/{category_id}"
@@ -127,8 +127,8 @@ class QueryRequest(BaseModel):
 ```python
 import requests
 
-CHAT_URL = "http://localhost:8000/api/chat"
-QUERY_URL = "http://localhost:8000/api/query"
+CHAT_URL = "http://localhost:8080/api/chat"
+QUERY_URL = "http://localhost:8080/api/query"
 
 def chat_with_docs(message: str, chat_id: str = None):
     # If sending images, use multipart/form-data. 

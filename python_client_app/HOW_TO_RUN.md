@@ -2,7 +2,7 @@
 
 This system consists of three parts that need to be running simultaneously:
 
-1.  **Main API (Backend)**: The core logic (Port 8000).
+1.  **Main API (Backend)**: The core logic (Port 8080).
 2.  **Python Client Proxy**: The strict DTO layer (Port 8001).
 3.  **Frontend (HTML/JS)**: The user interface.
 
@@ -19,14 +19,14 @@ Open a terminal and run:
 pip install -r requirements.txt
 
 # Start API
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 *Alternatively, run the FULL stack with Docker:*
 ```bash
 docker-compose up --build
 ```
 This starts:
-- **Backend API**: http://localhost:8000
+- **Backend API**: http://localhost:8080
 - **Client Proxy**: http://localhost:8001
 - **Frontend UI**: http://localhost:8002
 

@@ -6,7 +6,7 @@
 const HOST = window.location.hostname;
 const PROTOCOL = window.location.protocol;
 const PORT_CLIENT = '8001';
-const PORT_BACKEND = '8000';
+const PORT_BACKEND = '8080';
 
 // If running on localhost, use distinct ports.
 // If deployed (e.g. via Nginx reverse proxy), these usually map to paths like /api or /client-api
@@ -17,7 +17,7 @@ const BACKEND_BASE = `${PROTOCOL}//${HOST}:${PORT_BACKEND}`;
 class Api {
     /**
      * Resolve image paths to full URLs served by the backend.
-     * Paths like "extracted_images/..." or "chat_images/..." become "http://localhost:8000/extracted_images/..."
+     * Paths like "extracted_images/..." or "chat_images/..." become "http://localhost:8080/extracted_images/..."
      */
     static resolveImageUrl(path) {
         if (!path) return '';

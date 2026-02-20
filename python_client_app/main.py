@@ -23,5 +23,5 @@ app.include_router(client_router.router, prefix="/client-api")
 
 if __name__ == "__main__":
     import uvicorn
-    # Run on a different port than the main API (8000)
+    # Run on a different port than the main API (8080)
     uvicorn.run("python_client_app.main:app", host="0.0.0.0", port=8001, reload=True)

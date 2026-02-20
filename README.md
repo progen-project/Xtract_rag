@@ -78,7 +78,7 @@ Ensure MongoDB is running locally or configure MongoDB Atlas URI.
 uvicorn app.main:app --reload
 ```
 
-The API will be available at `http://localhost:8000`
+The API will be available at `http://localhost:8080`
 
 ## API Endpoints
 
@@ -108,7 +108,7 @@ The API will be available at `http://localhost:8000`
 ### Upload a Document
 
 ```bash
-curl -X POST "http://localhost:8000/api/documents/upload" \
+curl -X POST "http://localhost:8080/api/documents/upload" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@document.pdf"
 ```
@@ -116,7 +116,7 @@ curl -X POST "http://localhost:8000/api/documents/upload" \
 ### Query the System
 
 ```bash
-curl -X POST "http://localhost:8000/api/query/" \
+curl -X POST "http://localhost:8080/api/query/" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "What are the main findings?",
