@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 # --- configuration ---
-BASE_URL = "http://localhost:8000/api"
+BASE_URL = "http://localhost:8080/api"
 
 # --- Schemas ---
 

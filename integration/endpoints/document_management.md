@@ -77,7 +77,7 @@ import requests
 import json
 
 batch_id = "your_batch_id"
-url = f"http://localhost:8000/api/batches/{batch_id}/progress"
+url = f"http://localhost:8080/api/batches/{batch_id}/progress"
 
 with requests.get(url, stream=True) as response:
     for line in response.iter_lines():

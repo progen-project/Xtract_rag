@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "petrorag-api-collection-v2",
 		"name": "PetroRAG API",
-		"description": "Complete API collection for PetroRAG — a multimodal RAG pipeline for document management, chat, and query.\n\n## Architecture\n- **Main API** (port 8000): Core backend — `{{base_url}}`\n- **Client Proxy** (port 8001): Typed proxy layer — `{{client_url}}`\n\n## Quick Start\n1. Import this collection and the environment file\n2. Start the backend: `uvicorn app.main:app --port 8000`\n3. Run requests in order: Create Category → Upload → Chat/Query\n\n## Response Schema Notes\n- All timestamps are ISO 8601 format\n- Document status: `pending` | `processing` | `completed` | `failed`\n- Errors return `{\"detail\": \"...\"}`\n- Streaming endpoints use Server-Sent Events (SSE)",
+		"description": "Complete API collection for PetroRAG — a multimodal RAG pipeline for document management, chat, and query.\n\n## Architecture\n- **Main API** (port 8080): Core backend — `{{base_url}}`\n- **Client Proxy** (port 8001): Typed proxy layer — `{{client_url}}`\n\n## Quick Start\n1. Import this collection and the environment file\n2. Start the backend: `uvicorn app.main:app --port 8080`\n3. Run requests in order: Create Category → Upload → Chat/Query\n\n## Response Schema Notes\n- All timestamps are ISO 8601 format\n- Document status: `pending` | `processing` | `completed` | `failed`\n- Errors return `{\"detail\": \"...\"}`\n- Streaming endpoints use Server-Sent Events (SSE)",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [],
