@@ -258,7 +258,8 @@ class Api {
         return res.json();
     }
 
-    static async sendMessage(message, chatId, categoryIds = [], documentIds = [], images = []) {        const formData = new FormData();
+    static async sendMessage(message, chatId, categoryIds = [], documentIds = [], images = []) {
+        const formData = new FormData();
         formData.append('message', message);
         if (chatId) formData.append('chat_id', chatId);
         if (categoryIds && categoryIds.length > 0) {
@@ -292,7 +293,8 @@ class Api {
      * @param {function} onDone   - called with final metadata object
      * @param {function} onError  - called on error
      */
-    static async sendMessageStream(message, chatId, categoryIds = [], documentIds = [], images = [], onToken, onDone, onError) {        const formData = new FormData();
+    static async sendMessageStream(message, chatId, categoryIds = [], documentIds = [], images = [], onToken, onDone, onError) {
+        const formData = new FormData();
         formData.append('message', message);
         if (chatId) formData.append('chat_id', chatId);
         if (categoryIds && categoryIds.length > 0) {
