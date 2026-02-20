@@ -37,13 +37,15 @@ class ChatSession(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+from app.config.settings import get_settings
+
 class ChatRequest(BaseModel):
     """Request for chat endpoint (used with form-data)."""
     chat_id: Optional[str] = None
     message: str
     category_ids: Optional[List[str]] = None
     document_ids: Optional[List[str]] = None
-    top_k: int = Field(default=5, ge=1, le=20)
+    top_k: int = Field(default_factory=lambda: get_settings().top_k, ge=1, le=100)
 
 
 class ChatResponse(BaseModel):

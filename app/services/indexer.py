@@ -462,7 +462,7 @@ class Indexer:
     def query(
         self,
         query_text: str,
-        top_k: int = 5,
+        top_k: int = get_settings().top_k,
         document_ids: Optional[List[str]] = None,
         category_ids: Optional[List[str]] = None
     ) -> List[RetrievedChunk]:

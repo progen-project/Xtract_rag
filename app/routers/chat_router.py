@@ -10,6 +10,7 @@ import json
 from app.core.dependencies import get_chat_controller
 from app.controllers import ChatController
 from app.schemas import ChatSession, ChatResponse
+from app.config.settings import get_settings
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
@@ -20,7 +21,7 @@ async def chat(
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
     document_ids: Optional[str] = Form(None),
-    top_k: int = Form(5),
+    top_k: int = Form(get_settings().top_k),
     images: List[UploadFile] = File(default=[]),
     controller: ChatController = Depends(get_chat_controller)
 ):
@@ -77,7 +78,7 @@ async def chat_stream(
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
     document_ids: Optional[str] = Form(None),
-    top_k: int = Form(5),
+    top_k: int = Form(get_settings().top_k),
     images: List[UploadFile] = File(default=[]),
     controller: ChatController = Depends(get_chat_controller)
 ):

@@ -41,7 +41,6 @@ class ChatRequest(BaseModel):
     chat_id: Optional[str] = Field(None, description="Existing chat ID")
     category_ids: Optional[List[str]] = Field(None, description="Filter by categories")
     document_ids: Optional[List[str]] = Field(None, description="Filter by documents")
-    top_k: int = Field(5, description="Number of context chunks to retrieve")
 
 
 class ImageSearchResult(BaseModel):

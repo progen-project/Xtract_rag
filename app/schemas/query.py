@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 
 from .document import ExtractedImage, ExtractedTable
+from app.config.settings import get_settings
 
 
 class QueryRequest(BaseModel):
@@ -12,7 +13,7 @@ class QueryRequest(BaseModel):
     query: str
     category_ids: Optional[List[str]] = None
     document_ids: Optional[List[str]] = None
-    top_k: int = Field(default=5, ge=1, le=20)
+    top_k: int = Field(default_factory=lambda: get_settings().top_k, ge=1, le=100)
     include_images: bool = True
     include_tables: bool = True
 
@@ -45,7 +46,7 @@ class MultimodalQueryRequest(BaseModel):
     image_ids: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None
     document_ids: Optional[List[str]] = None
-    top_k: int = Field(default=5, ge=1, le=20)
+    top_k: int = Field(default_factory=lambda: get_settings().top_k, ge=1, le=100)
 
 
 class ImageSearchRequest(BaseModel):
@@ -54,7 +55,7 @@ class ImageSearchRequest(BaseModel):
     query_image_base64: Optional[str] = None
     category_ids: Optional[List[str]] = None
     document_ids: Optional[List[str]] = None
-    top_k: int = Field(default=5, ge=1, le=20)
+    top_k: int = Field(default_factory=lambda: get_settings().top_k, ge=1, le=100)
 
 
 class ImageSearchResult(BaseModel):

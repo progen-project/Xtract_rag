@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     qwen_text_model: str = Field(default="qwen/qwen3-32b", alias="QWEN_TEXT_MODEL")
     groq_vision_model: str = Field(default="meta-llama/llama-4-maverick-17b-128e-instruct", alias="GROQ_VISION_MODEL")
+    llm_temperature: float = Field(default=0.0, alias="LLM_TEMPERATURE")
+    llm_max_tokens: int = Field(default=5000, alias="LLM_MAX_TOKENS")
     
     # Optional: OpenAI for vision tasks
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
@@ -46,17 +48,24 @@ class Settings(BaseSettings):
     qdrant_api_key: str = Field(default="", alias="QDRANT_API_KEY")
     
     # MongoDB Collection Names
-    documents_collection: str = "rag_documents"
-    categories_collection: str = "rag_categories"
-    chunks_collection: str = "rag_chunks"
-    images_collection: str = "rag_images"
-    tables_collection: str = "rag_tables"
-    chats_collection: str = "rag_chats"
+    documents_collection: str = Field(default="rag_documents", alias="DOCUMENTS_COLLECTION")
+    categories_collection: str = Field(default="rag_categories", alias="CATEGORIES_COLLECTION")
+    chunks_collection: str = Field(default="rag_chunks", alias="CHUNKS_COLLECTION")
+    images_collection: str = Field(default="rag_images", alias="IMAGES_COLLECTION")
+    tables_collection: str = Field(default="rag_tables", alias="TABLES_COLLECTION")
+    chats_collection: str = Field(default="rag_chats", alias="CHATS_COLLECTION")
     
     # Chat Configuration
     chat_images_dir: Path = Field(default=Path("./chat_images"), alias="CHAT_IMAGES_DIR")
     chat_context_window: int = Field(default=10, alias="CHAT_CONTEXT_WINDOW")
     max_chat_images: int = Field(default=10, alias="MAX_CHAT_IMAGES")
+    
+    # Reranking Configuration
+    use_reranker: bool = Field(default=True, alias="USE_RERANKER")
+    rerank_model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2", alias="RERANKER_MODEL")
+    rerank_top_k: int = Field(default=10, alias="RERANK_TOP_K")
+    similarity_threshold: float = Field(default=0.0, alias="SIMILARITY_THRESHOLD")
+    top_k: int = Field(default=60, alias="TOP_K")
     
     # Logging Configuration
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

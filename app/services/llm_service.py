@@ -69,7 +69,7 @@ class LLMService:
         if system_prompt is None:
             system_prompt = """You are a helpful assistant that answers questions based on the provided context.
 Use only the information from the context to answer questions.
-If the context doesn't contain relevant information, say so.
+If the context doesn't contain relevant information, or if NO context chunks are provided at all, you must explicitly state that you cannot find the answer in the matched documents.
 
 FORMATTING RULES (CRITICAL):
 - Structure your answer with markdown: use ## headers to organize major sections
@@ -85,7 +85,7 @@ CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
 2. Use this EXACT format: [Source N, Page X-Y] where N is the source number and X-Y is the page range.
 3. If a sentence combines information from multiple sources, cite all of them: [Source 1, Page 3-4][Source 2, Page 7]
 4. NEVER make a factual statement without a citation.
-5. If the context doesn't contain relevant information, say so clearly.
+5. If the context doesn't contain relevant information or is EMPTY, say so clearly.
 
 Example format:
 "The production rate increased by 15% in Q3 [Source 1, Page 5-6], while operational costs decreased due to automation [Source 2, Page 12]."""
@@ -102,8 +102,8 @@ Example format:
             response = await self.client.chat.completions.create(
                 model=self.text_model,
                 messages=messages,
-                temperature=0.0,
-                max_tokens=5000
+                temperature=self.settings.llm_temperature,
+                max_tokens=self.settings.llm_max_tokens
             )
             
             return response.choices[0].message.content
@@ -213,7 +213,7 @@ Example format:
         # ==========================================
         # 2. Prepare system prompt for multimodal
         # ==========================================
-        system_content = """You are a helpful assistant that answers questions based on both text context and images.
+        system_content = """If the context doesn't contain relevant information, or if NO context chunks are provided at all, you must explicitly state that you cannot find the answer in the matched documents.
 
 FORMATTING RULES (CRITICAL):
 - Structure your answer with markdown: use ## headers to organize major sections
@@ -232,6 +232,7 @@ CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
 5. When images are provided, examine them carefully and reference them: [Image N, Page X]
 6. Describe what you see in images when relevant to the question.
 7. Combine information from both text and images for comprehensive answers.
+8. If the context doesn't contain relevant information or is EMPTY, say so clearly.
 
 Example format:
 "The production rate increased by 15% in Q3 [Source 1, Page 5-6]. The flow diagram shows the updated pipeline layout [Image 1, Page 8]."""
@@ -312,8 +313,8 @@ Example format:
                 response = await self.client.chat.completions.create(
                     model=self.vision_model,
                     messages=messages,
-                    temperature=0.0,
-                    max_tokens=5000
+                    temperature=self.settings.llm_temperature,
+                    max_tokens=self.settings.llm_max_tokens
                 )
                 
                 answer = response.choices[0].message.content
@@ -359,8 +360,8 @@ Example format:
                         "content": f"{fallback_context}\n\nQuestion: {query}"
                     }
                 ],
-                temperature=0.0,
-                max_tokens=5000
+                temperature=self.settings.llm_temperature,
+                max_tokens=self.settings.llm_max_tokens
             )
             
             answer = response.choices[0].message.content
@@ -403,17 +404,17 @@ Example format:
         if system_prompt is None:
             system_prompt = """You are a helpful assistant that answers questions based on the provided context.
 Use only the information from the context to answer questions.
-If the context doesn't contain relevant information, say so.
+If the context doesn't contain relevant information, or if NO context chunks are provided at all, you must explicitly state that you cannot find the answer in the matched documents.
 
 CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
 1. After EVERY claim, fact, or piece of information in your answer, you MUST add an inline citation.
 2. Use this EXACT format: [Source N, Page X-Y] where N is the source number and X-Y is the page range.
 3. If a sentence combines information from multiple sources, cite all of them: [Source 1, Page 3-4][Source 2, Page 7]
 4. NEVER make a factual statement without a citation.
-5. If the context doesn't contain relevant information, say so clearly.
+5. If the context doesn't contain relevant information or is EMPTY, say so clearly.
 
-Example format:
-"The production rate increased by 15% in Q3 [Source 1, Page 5-6], while operational costs decreased due to automation [Source 2, Page 12].\""""
+"The production rate increased by 15% in Q3 [Source 1, Page 5-6], while operational costs decreased due to automation [Source 2, Page 12]."
+"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -424,8 +425,8 @@ Example format:
             stream = await self.client.chat.completions.create(
                 model=self.text_model,
                 messages=messages,
-                temperature=0.0,
-                max_tokens=5000,
+                temperature=self.settings.llm_temperature,
+                max_tokens=self.settings.llm_max_tokens,
                 stream=True
             )
             async for chunk in stream:
@@ -495,7 +496,7 @@ Example format:
 
         context_text = "\n".join(context_parts)
 
-        system_content = """You are a helpful assistant that answers questions based on both text context and images.
+        system_content = """If the context doesn't contain relevant information, or if NO context chunks are provided at all, you must explicitly state that you cannot find the answer in the matched documents.
 
 FORMATTING RULES (CRITICAL):
 - Structure your answer with markdown: use ## headers to organize major sections
@@ -514,9 +515,11 @@ CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
 5. When images are provided, examine them carefully and reference them: [Image N, Page X]
 6. Describe what you see in images when relevant to the question.
 7. Combine information from both text and images for comprehensive answers.
+8. If the context doesn't contain relevant information or is EMPTY, say so clearly.
 
 Example format:
-"The production rate increased by 15% in Q3 [Source 1, Page 5-6]. The flow diagram shows the updated pipeline layout [Image 1, Page 8].\""""
+"The production rate increased by 15% in Q3 [Source 1, Page 5-6]. The flow diagram shows the updated pipeline layout [Image 1, Page 8]."
+"""
 
         user_content = [{"type": "text", "text": f"Context:\n{context_text}\n\nQuestion: {query}"}]
 
@@ -559,8 +562,8 @@ Example format:
                 stream = await self.client.chat.completions.create(
                     model=self.vision_model,
                     messages=messages,
-                    temperature=0.0,
-                    max_tokens=5000,
+                    temperature=self.settings.llm_temperature,
+                    max_tokens=self.settings.llm_max_tokens,
                     stream=True
                 )
                 async for chunk in stream:
@@ -579,8 +582,8 @@ Example format:
                     {"role": "system", "content": system_content},
                     {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {query}"}
                 ],
-                temperature=0.0,
-                max_tokens=5000,
+                temperature=self.settings.llm_temperature,
+                max_tokens=self.settings.llm_max_tokens,
                 stream=True
             )
             async for chunk in stream:
@@ -683,8 +686,8 @@ Example format:
             response = await self.client.chat.completions.create(
                 model=self.vision_model,
                 messages=messages,
-                temperature=0.0,
-                max_tokens=5000
+                temperature=self.settings.llm_temperature,
+                max_tokens=self.settings.llm_max_tokens
             )
             
             return response.choices[0].message.content

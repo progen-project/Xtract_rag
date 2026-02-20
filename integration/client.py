@@ -39,12 +39,10 @@ class ChatRequest(BaseModel):
     message: str
     chat_id: Optional[str] = None
     category_ids: Optional[List[str]] = None
-    top_k: int = 5
 
 class QueryRequest(BaseModel):
     query: str
     category_ids: Optional[List[str]] = None
-    top_k: int = 5
 
 # --- Client ---
 
@@ -143,7 +141,6 @@ class RAGClient:
         # but for text-only, we can send form fields.
         data = {
             "message": message,
-            "top_k": 5
         }
         if chat_id:
             data["chat_id"] = chat_id

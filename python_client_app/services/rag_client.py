@@ -102,11 +102,20 @@ class RAGClientService:
             
             # Extract filename from Content-Disposition header
             content_disp = response.headers.get("content-disposition", "")
+            
             filename = "document.pdf"
-            if "filename=" in content_disp:
-                parts = content_disp.split("filename=")
-                if len(parts) > 1:
-                    filename = parts[1].strip().strip('"').strip("'")
+            
+            # Try to match filename* first (RFC 5987)
+            import re
+            star_match = re.search(r"filename\*=UTF-8''([^;]+)", content_disp, re.IGNORECASE)
+            if star_match:
+                from urllib.parse import unquote
+                filename = unquote(star_match.group(1).strip())
+            else:
+                # Fallback to standard filename
+                match = re.search(r'filename="?([^";]+)"?', content_disp, re.IGNORECASE)
+                if match:
+                    filename = match.group(1).strip()
             
             content_type = response.headers.get("content-type", "application/pdf")
             
@@ -174,7 +183,6 @@ class RAGClientService:
     async def send_message(self, request: ChatRequest, images: List[tuple] = None) -> ChatResponse:
         data = {
             "message": request.message,
-            "top_k": str(request.top_k)
         }
         if request.chat_id:
             data["chat_id"] = request.chat_id

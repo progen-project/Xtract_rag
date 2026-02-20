@@ -139,6 +139,7 @@ class Api {
      * Download a document with the correct filename.
      * Uses fetch + blob to bypass cross-origin download attribute limitations.
      */
+
     static async downloadDocumentBlob(documentId, suggestedFilename) {
         const res = await fetch(`${API_BASE}/documents/${documentId}/download`);
         if (!res.ok) throw new Error('Download failed');
@@ -146,8 +147,18 @@ class Api {
         // Extract filename from Content-Disposition header
         const disp = res.headers.get('content-disposition') || '';
         let filename = suggestedFilename || 'document.pdf';
+        
+        // Try standard filename parameter
         const match = disp.match(/filename="?([^";\n]+)"?/);
-        if (match) filename = match[1].trim();
+        if (match) {
+            filename = match[1].trim();
+        } else {
+            // Try RFC 5987 (filename*)
+            const matchStar = disp.match(/filename\*=UTF-8''([^";\n]+)/);
+            if (matchStar) {
+                filename = decodeURIComponent(matchStar[1].trim());
+            }
+        }
 
         // Create blob URL (same-origin) so download attribute works
         const blob = await res.blob();
@@ -339,8 +350,8 @@ class Api {
     }
 
     // --- Query ---
-    static async query(queryText, categoryIds = null, topK = 5) {
-        const body = { query: queryText, top_k: topK };
+    static async query(queryText, categoryIds = null) {
+        const body = { query: queryText };
         if (categoryIds) body.category_ids = categoryIds;
 
         const res = await fetch(`${API_BASE}/query`, {
@@ -351,6 +362,7 @@ class Api {
         if (!res.ok) throw new Error('Query failed');
         return res.json();
     }
+
 
     static async searchImages(queryText = null, imageBase64 = null, categoryIds = null) {
         const body = {};

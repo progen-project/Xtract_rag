@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from qdrant_client.models import SparseVector
 from fastembed import SparseTextEmbedding
 
+from app.services.rerank_service import get_rerank_service
+from app.config.settings import get_settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,12 +54,13 @@ class UnifiedSearchService:
         self.sparse_embed_model = indexer.sparse_embed_model
         self.qdrant_client = indexer.qdrant_client
         self.settings = indexer.settings
+        self.rerank_service = get_rerank_service()
     
     def search(
         self,
         query_text: str,
         query_image_data: Optional[str] = None,  # Base64 for image query
-        top_k: int = 10,
+        top_k: int = get_settings().top_k,
         document_ids: Optional[List[str]] = None,
         category_ids: Optional[List[str]] = None,
         search_text: bool = True,
@@ -126,11 +130,45 @@ class UnifiedSearchService:
             all_results.extend(image_results)
             logger.info(f"Image search: {len(image_results)} results")
         
-        # Sort by weighted score and return top_k
+        # Determine final result count
+        final_top_k = self.settings.rerank_top_k
+        
+        # Sort by weighted score and return top results for reranking
         all_results.sort(key=lambda x: x.score, reverse=True)
         
-        final_results = all_results[:top_k]
-        logger.info(f"Unified search returned {len(final_results)} results")
+        # In this new logic, top_k IS the initial search limit (candidates to consider)
+        candidates = all_results[:top_k]
+        
+        # Apply Reranking if enabled
+        if self.settings.use_reranker and candidates:
+            logger.info(f"Reranking {len(candidates)} candidates...")
+            self.rerank_service.initialize()
+            
+            # Prepare texts for reranker
+            doc_texts = [res.content for res in candidates]
+            
+            # Get new scores
+            rerank_scores = self.rerank_service.rerank(query_text, doc_texts)
+            
+            # Update scores
+            for i, score in enumerate(rerank_scores):
+                candidates[i].score = score
+            
+            # Sort again by new scores
+            candidates.sort(key=lambda x: x.score, reverse=True)
+            logger.info("Reranking completed")
+        
+        # Apply similarity threshold if configured
+        threshold = self.settings.similarity_threshold
+        if threshold > 0:
+            initial_count = len(candidates)
+            candidates = [res for res in candidates if res.score >= threshold]
+            if len(candidates) < initial_count:
+                logger.info(f"Filtered out {initial_count - len(candidates)} results below threshold {threshold}")
+        
+        # Finally, slice by rerank_top_k which is the expected FINAL result count
+        final_results = candidates[:final_top_k]
+        logger.info(f"Unified search returned {len(final_results)} results (from {len(all_results)} initial candidates)")
         
         return final_results
     
