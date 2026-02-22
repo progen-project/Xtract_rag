@@ -14,100 +14,308 @@ from app.schemas import Chunk, ExtractedImage, RetrievedChunk
 logger = logging.getLogger(__name__)
 
 
+# ============================================================
+# CENTRALISED PROMPT TEMPLATES
+# All prompt changes live here — no hunting across methods.
+# ============================================================
+
+_BASE_RAG_SYSTEM = """\
+You are a highly accurate document-analysis assistant specializing in petroleum engineering documents.
+
+## LANGUAGE RULE (HIGHEST PRIORITY)
+Detect the language of the user's question and **always respond in that exact language**.
+- If the question is in Arabic → answer fully in Arabic.
+- If the question is in English → answer fully in English.
+- If the question mixes languages → match the dominant language.
+- Document content may differ in language from the question; that is fine — translate relevant findings into the answer language.
+
+## SCOPE & RELEVANCE
+- Answer ONLY from the provided context chunks.
+- If the question is **completely unrelated** to petroleum engineering or the document content (e.g., cooking, sports, general trivia), politely decline and explain that you are scoped to document-based petroleum engineering queries.
+- If the context exists but does **not contain enough information** to answer confidently, clearly say so and indicate which aspect is missing — do NOT fabricate data.
+- If **no context chunks** are provided at all, explicitly state: "No relevant information was found in the selected documents."
+- If the question is **ambiguous**, address the most likely intended interpretation and note the assumption made.
+
+## CONFIDENCE SIGNALS
+- When information is explicit in the source: state it directly.
+- When you are inferring or the source is indirect: prefix with "Based on the available context, …" or "This appears to suggest …".
+- Never present inferences as confirmed facts.
+
+## FORMATTING RULES
+- Start with a **1–2 sentence executive summary**.
+- Use `##` headers to separate major sections (avoid excessive sub-headers).
+- Use **bold** for key terms, values, and critical findings.
+- Use bullet points (`-`) for lists of 3+ unordered items.
+- Use numbered lists for sequential steps or ranked items.
+- Use markdown tables for comparative or structured data.
+- Keep paragraphs ≤ 3 sentences.
+- Avoid filler phrases like "Certainly!", "Great question!", or "As an AI…".
+
+## CITATION RULES (MANDATORY)
+1. Cite EVERY factual claim inline immediately after the claim.
+2. Format: `[Source N, Page X–Y]` — use en-dash, not hyphen.
+3. Multiple sources for one claim: `[Source 1, Page 3–4][Source 2, Page 7]`.
+4. Never group all citations at the end; they must be inline.
+5. Do NOT cite for general knowledge statements (e.g., definitions of basic physics).
+
+## EXAMPLE OUTPUT
+"The wellbore pressure was recorded at 3,450 psi during the test period [Source 1, Page 12–13]. \
+Casing integrity was confirmed via a pressure build-up analysis [Source 2, Page 7]."
+"""
+
+_BASE_MULTIMODAL_SYSTEM = """\
+You are a highly accurate document-analysis assistant specializing in petroleum engineering documents.
+You can read text, tables, and images (diagrams, charts, photos, schematics).
+
+## LANGUAGE RULE (HIGHEST PRIORITY)
+Detect the language of the user's question and **always respond in that exact language**.
+- If the question is in Arabic → answer fully in Arabic.
+- If the question is in English → answer fully in English.
+- Document content or image labels may differ in language; still respond in the question's language.
+
+## SCOPE & RELEVANCE
+- Answer ONLY from the provided context (text chunks, tables, and images).
+- If the question is completely unrelated to the documents or petroleum engineering, politely decline.
+- If context is insufficient, clearly state what is missing — never fabricate.
+- If no context is provided, state: "No relevant information was found in the selected documents."
+
+## CONFIDENCE SIGNALS
+- Explicit source data → state directly.
+- Visual inference from image → prefix with "The image appears to show …".
+- Do not present visual interpretations as confirmed facts.
+
+## IMAGE HANDLING
+- Examine every provided image carefully before answering.
+- Reference images with `[Image N, Page X]` immediately after any image-based claim.
+- If an image is unclear or irrelevant to the question, note that briefly and continue.
+- Combine textual and visual evidence for the most complete answer.
+
+## FORMATTING RULES
+- 1–2 sentence executive summary first.
+- `##` headers for major sections; **bold** for key values.
+- Bullet points for unordered lists; numbered lists for sequences.
+- Markdown tables for structured/comparative data.
+- Paragraphs ≤ 3 sentences. No filler phrases.
+
+## CITATION RULES (MANDATORY)
+1. Cite every factual claim inline: `[Source N, Page X–Y]`.
+2. Image-based claims: `[Image N, Page X]`.
+3. Multiple sources: `[Source 1, Page 3–4][Source 2, Page 7]`.
+4. Citations must be inline, not grouped at the end.
+5. No citation needed for basic definitional statements.
+
+## EXAMPLE OUTPUT
+"The separator efficiency reached 94.3% under test conditions [Source 1, Page 5–6]. \
+The P&ID diagram confirms the bypass valve location upstream of the separator [Image 2, Page 8]."
+"""
+
+_DIRECT_RESPONSE_SYSTEM = """\
+You are a senior Petroleum Engineer with 20+ years of experience across upstream, midstream, and downstream operations.
+
+## LANGUAGE RULE (HIGHEST PRIORITY)
+Always respond in the **same language as the user's question**.
+- Arabic question → Arabic answer.
+- English question → English answer.
+
+## SCOPE
+- You answer general petroleum engineering questions from your expertise.
+- If a question is completely unrelated to petroleum engineering (e.g., cooking, sports), politely clarify your scope.
+- If a question was expected to be answered from specific documents but none were provided or matched, clearly say: \
+  "I could not find this in the selected documents, but based on general petroleum engineering knowledge: …"
+
+## FORMATTING RULES
+- Use `##` headers, **bold** for key terms, and bullet points where appropriate.
+- Keep answers technically precise and concise.
+- No filler phrases.
+"""
+
+_IMAGE_ANALYSIS_SYSTEM = """\
+You are a technical image analyst specializing in petroleum engineering diagrams, charts, schematics, and figures.
+
+## TASK
+Carefully examine the provided image and produce a structured technical description.
+
+## LANGUAGE RULE
+If a specific question is asked, respond in the language of that question.
+Otherwise, respond in English by default.
+
+## OUTPUT STRUCTURE
+1. **Image Type**: (e.g., P&ID, well log, production chart, geological cross-section, equipment photo)
+2. **Key Visual Elements**: List all significant components, labels, axes, legends, or annotations visible.
+3. **Data / Values**: Extract any numeric values, units, dates, or thresholds shown.
+4. **Technical Interpretation**: What does this image communicate in the context of petroleum engineering?
+5. **Limitations**: Note anything unclear, cut off, low-resolution, or ambiguous.
+
+## RULES
+- Prioritize what is explicitly visible; do not invent details.
+- Use context text (if provided) to clarify ambiguous elements, but label inferences clearly.
+- Be concise but thorough — downstream RAG will use this analysis for retrieval.
+"""
+
+
 class LLMService:
     """
     LLM service using GROQ API with Qwen models.
     Supports text generation and multimodal (vision) queries.
     """
-    
+
     def __init__(self):
         self.settings = get_settings()
         self.client: Optional[AsyncGroq] = None
         self.text_model = self.settings.qwen_text_model
-        self.vision_model = self.settings.groq_vision_model  # Configured vision model
-    
+        self.vision_model = self.settings.groq_vision_model
+
     def initialize(self) -> None:
         """Initialize the GROQ client."""
         if not self.settings.groq_api_key:
             logger.warning("GROQ API key not configured")
             return
-        
+
         import os
         os.environ["GROQ_API_KEY"] = self.settings.groq_api_key
-        
+
         self.client = AsyncGroq()
         logger.info(f"Initialized GROQ client (text: {self.text_model}, vision: {self.vision_model})")
-    
+
+    # ----------------------------------------------------------
+    # HELPER: build text-only context string from chunks
+    # ----------------------------------------------------------
+    @staticmethod
+    def _build_context(context_chunks: List[RetrievedChunk]) -> str:
+        parts = []
+        for i, chunk in enumerate(context_chunks, 1):
+            image_note = ""
+            if hasattr(chunk, "image_ids") and chunk.image_ids:
+                image_note = f" [Contains {len(chunk.image_ids)} image(s)]"
+            parts.append(
+                f"[Source {i} - {chunk.section_title} "
+                f"(Pages {chunk.page_start}–{chunk.page_end}){image_note}]\n"
+                f"{chunk.content}\n"
+            )
+        return "\n".join(parts) if parts else "[NO CONTEXT AVAILABLE]"
+
+    # ----------------------------------------------------------
+    # HELPER: build multimodal context (text + tables + images meta)
+    # ----------------------------------------------------------
+    @staticmethod
+    def _build_multimodal_context(
+        context_chunks: List[RetrievedChunk],
+        tables: Optional[List[Any]],
+        retrieved_images: Optional[List[Any]],
+        max_retrieved_images: int,
+    ) -> str:
+        parts = []
+
+        # Text chunks
+        for i, chunk in enumerate(context_chunks, 1):
+            image_mention = ""
+            if hasattr(chunk, "image_ids") and chunk.image_ids:
+                image_mention = f" [Contains {len(chunk.image_ids)} image(s)]"
+            parts.append(
+                f"[Source {i} - {chunk.section_title} "
+                f"(Pages {chunk.page_start}–{chunk.page_end}){image_mention}]\n"
+                f"{chunk.content}\n"
+            )
+
+        if not parts:
+            parts.append("[NO TEXT CONTEXT AVAILABLE]")
+
+        # Tables
+        if tables:
+            parts.append("\n=== RELEVANT TABLES ===\n")
+            for i, table in enumerate(tables, 1):
+                if hasattr(table, "markdown_content"):
+                    content, page, title = table.markdown_content, table.page_number, table.section_title
+                else:
+                    content = table.get("markdown", "") or str(table)
+                    page = table.get("page_number", "?")
+                    title = table.get("section_title", "")
+                parts.append(f"[Table {i} – Section: {title} (Page {page})]\n{content}\n")
+
+        # Image analysis summaries
+        if retrieved_images:
+            parts.append("\n=== RETRIEVED IMAGE ANALYSES ===\n")
+            for i, img in enumerate(retrieved_images[:max_retrieved_images], 1):
+                analysis = getattr(img, "analysis", "")
+                caption = getattr(img, "caption", "") or ""
+                title = getattr(img, "section_title", "") or "Unknown section"
+                page = getattr(img, "page_number", "?")
+
+                info = [f"Image {i}: {Path(img.image_path).name} (Page {page}, Section: {title})"]
+                if caption:
+                    info.append(f"Caption: {caption}")
+                if analysis:
+                    info.append(f"Analysis: {analysis}")
+                elif not caption:
+                    info.append("Note: No textual analysis available — refer to the visual below.")
+                parts.append("\n".join(info) + "\n")
+
+        return "\n".join(parts)
+
+    # ----------------------------------------------------------
+    # HELPER: append image blobs to user_content list
+    # ----------------------------------------------------------
+    def _append_images(
+        self,
+        user_content: list,
+        retrieved_images: Optional[List[Any]],
+        user_uploaded_images: Optional[List[str]],
+        max_retrieved_images: int,
+        max_user_images: int,
+    ) -> None:
+        if retrieved_images:
+            for img_obj in retrieved_images[:max_retrieved_images]:
+                img_path = getattr(img_obj, "image_path", "")
+                if not img_path:
+                    continue
+                try:
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}", "detail": "low"},
+                    })
+                except Exception as e:
+                    logger.warning(f"Could not load retrieved image {img_path}: {e}")
+
+        if user_uploaded_images:
+            for img_path in user_uploaded_images[:max_user_images]:
+                try:
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}", "detail": "high"},
+                    })
+                except Exception as e:
+                    logger.warning(f"Could not load user image {img_path}: {e}")
+
+    # ==========================================================
+    # PUBLIC METHODS
+    # ==========================================================
+
     async def generate_response(
         self,
         query: str,
         context_chunks: List[RetrievedChunk],
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
     ) -> str:
-        """
-        Generate a TEXT-ONLY response (no images).
-        Use generate_multimodal_response() when images are involved.
-        """
+        """Generate a TEXT-ONLY response (no images)."""
         if not self.client:
             raise ValueError("GROQ client not initialized. Check API key.")
-        
-        # Build context from chunks (TEXT ONLY)
-        context_parts = []
-        for i, chunk in enumerate(context_chunks, 1):
-            # Mention if images exist but DON'T include base64
-            image_note = ""
-            if hasattr(chunk, 'image_ids') and chunk.image_ids:
-                image_note = f" [Contains {len(chunk.image_ids)} image(s)]"
-            
-            context_parts.append(
-                f"[Source {i} - {chunk.section_title} (Pages {chunk.page_start}-{chunk.page_end}){image_note}]\n"
-                f"{chunk.content}\n"
-            )
-        
-        context = "\n".join(context_parts)
-        
-        if system_prompt is None:
-            system_prompt = """You are a helpful assistant that answers questions based on the provided context.
-Use only the information from the context to answer questions.
-If the context doesn't contain relevant information, or if NO context chunks are provided at all, you must explicitly state that you cannot find the answer in the matched documents.
 
-FORMATTING RULES (CRITICAL):
-- Structure your answer with markdown: use ## headers to organize major sections
-- Use **bold** for key terms, values, and important findings
-- Use bullet points (- ) for listing multiple items, factors, or properties
-- Use numbered lists (1. 2. 3.) for sequential steps, ranked items, or procedures
-- Use tables (| col | col |) when comparing data or presenting structured information
-- Keep paragraphs short (2-3 sentences max)
-- Start with a brief 1-2 sentence summary, then provide detailed sections
+        context = self._build_context(context_chunks)
+        prompt = system_prompt or _BASE_RAG_SYSTEM
 
-CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
-1. After EVERY claim, fact, or piece of information in your answer, you MUST add an inline citation.
-2. Use this EXACT format: [Source N, Page X-Y] where N is the source number and X-Y is the page range.
-3. If a sentence combines information from multiple sources, cite all of them: [Source 1, Page 3-4][Source 2, Page 7]
-4. NEVER make a factual statement without a citation.
-5. If the context doesn't contain relevant information or is EMPTY, say so clearly.
-
-Example format:
-"The production rate increased by 15% in Q3 [Source 1, Page 5-6], while operational costs decreased due to automation [Source 2, Page 12]."""
-        
         messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user", 
-                "content": f"Context:\n{context}\n\nQuestion: {query}"
-            }
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"},
         ]
-        
+
         try:
             response = await self.client.chat.completions.create(
                 model=self.text_model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
-                max_tokens=self.settings.llm_max_tokens
+                max_tokens=self.settings.llm_max_tokens,
             )
-            
             return response.choices[0].message.content
-            
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             raise
@@ -115,350 +323,119 @@ Example format:
     async def generate_direct_response(
         self,
         query: str,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
     ) -> str:
-        """
-        Generate a direct response without RAG context.
-        Used for queries evaluated as non-relevant by LLM Guard.
-        """
+        """Generate a direct response without RAG context."""
         if not self.client:
             raise ValueError("GROQ client not initialized")
-        
-        if system_prompt is None:
-            system_prompt = (
-                "You are an expert Petroleum Engineer with extensive experience in the oil and gas industry. "
-                "You can help users by answering questions, providing technical insights, and solving problems in this domain. "
-                "Even if the user's specific question seems outside the provided document scope, "
-                "you should still provide a helpful, professional response based on your deep engineering expertise. "
-                "\n\nFORMATTING RULES:"
-                "\n- Use markdown headers (##), bold text, and bullet points."
-                "\n- Keep technical explanations clear and concise."
-            )
-        
+
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query}
+            {"role": "system", "content": system_prompt or _DIRECT_RESPONSE_SYSTEM},
+            {"role": "user", "content": query},
         ]
-        
+
         try:
             response = await self.client.chat.completions.create(
                 model=self.text_model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
-                max_tokens=self.settings.llm_max_tokens
+                max_tokens=self.settings.llm_max_tokens,
             )
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"Error in direct generation: {e}")
             raise
-    
+
     async def generate_multimodal_response(
         self,
         query: str,
         context_chunks: List[RetrievedChunk],
         tables: Optional[List[Any]] = None,
-        retrieved_images: Optional[List[Any]] = None,  # Changed: List of ExtractedImage
+        retrieved_images: Optional[List[Any]] = None,
         user_uploaded_images: Optional[List[str]] = None,
         max_retrieved_images: int = 3,
-        max_user_images: int = 5
+        max_user_images: int = 5,
     ) -> str:
-        """
-        Generate response with PROPER multimodal handling.
-        
-        KEY POINTS:
-        - Text context does NOT contain base64
-        - Images sent separately as vision API objects
-        - User images get priority and high detail
-        - Retrieved images use low detail to save tokens
-        - INCLUDES image analysis text in context
-        
-        Args:
-            query: User question
-            context_chunks: Text chunks (NO BASE64 INSIDE)
-            tables: List of table objects to include in context
-            retrieved_images: List of ExtractedImage objects (contains analysis)
-            user_uploaded_images: User's uploaded query images
-            max_retrieved_images: Limit retrieved images (token management)
-            max_user_images: Limit user images
-            
-        Returns:
-            Generated response mentioning images when relevant
-        """
+        """Generate response with PROPER multimodal handling."""
         if not self.client:
             raise ValueError("GROQ client not initialized")
-        
-        # ==========================================
-        # 1. Build TEXT-ONLY context
-        # ==========================================
-        context_parts = []
-        image_metadata = []  # Track which chunks have images
-        
-        for i, chunk in enumerate(context_chunks, 1):
-            image_mention = ""
-            if hasattr(chunk, 'image_ids') and chunk.image_ids:
-                image_mention = f" [Contains {len(chunk.image_ids)} image(s)]"
-                image_metadata.append({
-                    'source_num': i,
-                    'section': chunk.section_title,
-                    'page_range': f"{chunk.page_start}-{chunk.page_end}",
-                    'num_images': len(chunk.image_ids)
-                })
-            
-            context_parts.append(
-                f"[Source {i} - {chunk.section_title} "
-                f"(Pages {chunk.page_start}-{chunk.page_end})"
-                f"{image_mention}]\n{chunk.content}\n"
-            )
-        
-        # Add tables to context
-        if tables:
-            context_parts.append("\n=== RELEVANT TABLES ===\n")
-            for i, table in enumerate(tables, 1):
-                # Handle both dicts and objects (ExtractedTable)
-                if hasattr(table, 'markdown_content'):
-                    content = table.markdown_content
-                    page = table.page_number
-                    title = table.section_title
-                else:
-                    content = table.get('markdown', '') or str(table)
-                    page = table.get('page_number', '?')
-                    title = table.get('section_title', '')
-                
-                context_parts.append(
-                    f"[Table {i} - Section: {title} (Page {page})]\n{content}\n"
-                )
 
-        # Add image analysis to context
-        if retrieved_images:
-            context_parts.append("\n=== RELEVANT IMAGES ANALYSIS ===\n")
-            for i, img in enumerate(retrieved_images[:max_retrieved_images], 1):
-                # Handle both objects and dicts if necessary, assuming ExtractedImage
-                analysis = getattr(img, 'analysis', '')
-                caption = getattr(img, 'caption', '') or "No caption"
-                title = getattr(img, 'section_title', '') or "No title"
-                page = getattr(img, 'page_number', '?')
-                
-                info_parts = [f"Image {i}: {Path(img.image_path).name} (Page {page}, Section: {title})"]
-                if caption:
-                    info_parts.append(f"Caption: {caption}")
-                if analysis:
-                    info_parts.append(f"Analysis: {analysis}")
-                elif not caption:
-                    info_parts.append("No textual analysis available.")
-                    
-                context_parts.append("\n".join(info_parts) + "\n")
-        
-        context_text = "\n".join(context_parts)
-        
-        # ==========================================
-        # 2. Prepare system prompt for multimodal
-        # ==========================================
-        system_content = """If the context doesn't contain relevant information, or if NO context chunks are provided at all, you must explicitly state that you cannot find the answer in the matched documents.
+        context_text = self._build_multimodal_context(
+            context_chunks, tables, retrieved_images, max_retrieved_images
+        )
 
-FORMATTING RULES (CRITICAL):
-- Structure your answer with markdown: use ## headers to organize major sections
-- Use **bold** for key terms, values, and important findings
-- Use bullet points (- ) for listing multiple items, factors, or properties
-- Use numbered lists (1. 2. 3.) for sequential steps, ranked items, or procedures
-- Use tables (| col | col |) when comparing data or presenting structured information
-- Keep paragraphs short (2-3 sentences max)
-- Start with a brief 1-2 sentence summary, then provide detailed sections
+        user_content: list = [{"type": "text", "text": f"Context:\n{context_text}\n\nQuestion: {query}"}]
+        self._append_images(user_content, retrieved_images, user_uploaded_images, max_retrieved_images, max_user_images)
 
-CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
-1. After EVERY claim, fact, or piece of information in your answer, you MUST add an inline citation.
-2. Use this EXACT format: [Source N, Page X-Y] where N is the source number and X-Y is the page range.
-3. If a sentence combines information from multiple sources, cite all of them: [Source 1, Page 3-4][Source 2, Page 7]
-4. NEVER make a factual statement without a citation.
-5. When images are provided, examine them carefully and reference them: [Image N, Page X]
-6. Describe what you see in images when relevant to the question.
-7. Combine information from both text and images for comprehensive answers.
-8. If the context doesn't contain relevant information or is EMPTY, say so clearly.
-
-Example format:
-"The production rate increased by 15% in Q3 [Source 1, Page 5-6]. The flow diagram shows the updated pipeline layout [Image 1, Page 8]."""
-        
-        # ==========================================
-        # 3. Build user message with text + images
-        # ==========================================
-        user_content = []
-        
-        # Add text context first
-        user_content.append({
-            "type": "text",
-            "text": f"Context:\n{context_text}\n\nQuestion: {query}"
-        })
-        
-        # ==========================================
-        # 4. Add RETRIEVED images (low detail)
-        # ==========================================
-        if retrieved_images:
-            logger.info(f"Adding {len(retrieved_images)} retrieved images to request")
-            
-            for idx, img_obj in enumerate(retrieved_images[:max_retrieved_images]):
-                img_path = getattr(img_obj, 'image_path', '')
-                if not img_path:
-                    continue
-                try:
-                    img_b64 = self._resize_image(img_path)
-                    
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{img_b64}",
-                            "detail": "low"  # Save tokens for retrieved images
-                        }
-                    })
-                    logger.debug(f"Added retrieved image {idx+1}: {Path(img_path).name}")
-                    
-                except Exception as e:
-                    logger.warning(f"Could not load retrieved image {img_path}: {e}")
-        
-        # ==========================================
-        # 5. Add USER uploaded images (high detail)
-        # ==========================================
-        if user_uploaded_images:
-            logger.info(f"Adding {len(user_uploaded_images)} user-uploaded images to request")
-            
-            for idx, img_path in enumerate(user_uploaded_images[:max_user_images]):
-                try:
-                    img_b64 = self._resize_image(img_path)
-                    
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{img_b64}",
-                            "detail": "high"  # High detail for user images
-                        }
-                    })
-                    logger.debug(f"Added user image {idx+1}: {Path(img_path).name}")
-                    
-                except Exception as e:
-                    logger.warning(f"Could not load user image {img_path}: {e}")
-        
-        # ==========================================
-        # 6. Build final messages
-        # ==========================================
         messages = [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": user_content}
+            {"role": "system", "content": _BASE_MULTIMODAL_SYSTEM},
+            {"role": "user", "content": user_content},
         ]
-        
-        # ==========================================
-        # 7. Try VISION model first
-        # ==========================================
+
         if retrieved_images or user_uploaded_images:
             try:
                 logger.info(f"Calling vision model: {self.vision_model}")
-                
                 response = await self.client.chat.completions.create(
                     model=self.vision_model,
                     messages=messages,
                     temperature=self.settings.llm_temperature,
-                    max_tokens=self.settings.llm_max_tokens
+                    max_tokens=self.settings.llm_max_tokens,
                 )
-                
-                answer = response.choices[0].message.content
                 logger.info("Vision model response generated successfully")
-                return answer
-                
+                return response.choices[0].message.content
             except Exception as e:
-                logger.warning(f"Vision model failed: {e}")
-                logger.info("Falling back to text-only model with image descriptions")
-        
-        # ==========================================
-        # 8. FALLBACK: Text-only with descriptions
-        # ==========================================
+                logger.warning(f"Vision model failed: {e}. Falling back to text-only.")
+
+        # Fallback: text-only
         try:
-            # Build fallback context with image filenames
             fallback_parts = [context_text]
-            
             if retrieved_images or user_uploaded_images:
-                fallback_parts.append("\n\n=== RELEVANT IMAGES ===")
-                
+                fallback_parts.append("\n\n=== IMAGES (not renderable in fallback mode) ===")
                 if retrieved_images:
-                    fallback_parts.append("Retrieved from document:")
+                    fallback_parts.append("Document images referenced:")
                     for img in retrieved_images[:max_retrieved_images]:
-                        path = getattr(img, 'image_path', 'unknown')
+                        path = getattr(img, "image_path", "unknown")
                         fallback_parts.append(f"  • {Path(path).name}")
-                
                 if user_uploaded_images:
-                    fallback_parts.append("\nUser uploaded:")
+                    fallback_parts.append("User-uploaded images:")
                     for img_path in user_uploaded_images[:max_user_images]:
                         fallback_parts.append(f"  • {Path(img_path).name}")
-            
             fallback_context = "\n".join(fallback_parts)
-            
+
             response = await self.client.chat.completions.create(
                 model=self.text_model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "Answer based on context. Mention that images are referenced but you cannot view them directly."
-                    },
-                    {
-                        "role": "user",
-                        "content": f"{fallback_context}\n\nQuestion: {query}"
-                    }
+                    {"role": "system", "content": _BASE_RAG_SYSTEM},
+                    {"role": "user", "content": f"Context:\n{fallback_context}\n\nNote: Images are referenced in the context but could not be rendered.\n\nQuestion: {query}"},
                 ],
                 temperature=self.settings.llm_temperature,
-                max_tokens=self.settings.llm_max_tokens
+                max_tokens=self.settings.llm_max_tokens,
             )
-            
-            answer = response.choices[0].message.content
-            logger.info("Fallback text model response generated")
-            return answer
-            
+            return response.choices[0].message.content
         except Exception as fallback_error:
             logger.error(f"Fallback also failed: {fallback_error}")
             raise
 
-    # ====================================================
-    # STREAMING GENERATORS (for word-by-word SSE output)
-    # ====================================================
+    # ==========================================================
+    # STREAMING METHODS
+    # ==========================================================
 
     async def generate_response_stream(
         self,
         query: str,
         context_chunks: List[RetrievedChunk],
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
     ):
-        """
-        Stream a TEXT-ONLY response token-by-token.
-        Yields each content delta string.
-        """
+        """Stream a TEXT-ONLY response token-by-token."""
         if not self.client:
             raise ValueError("GROQ client not initialized. Check API key.")
 
-        # Build context — same as generate_response
-        context_parts = []
-        for i, chunk in enumerate(context_chunks, 1):
-            image_note = ""
-            if hasattr(chunk, 'image_ids') and chunk.image_ids:
-                image_note = f" [Contains {len(chunk.image_ids)} image(s)]"
-            context_parts.append(
-                f"[Source {i} - {chunk.section_title} (Pages {chunk.page_start}-{chunk.page_end}){image_note}]\n"
-                f"{chunk.content}\n"
-            )
-        context = "\n".join(context_parts)
-
-        if system_prompt is None:
-            system_prompt = """You are a helpful assistant that answers questions based on the provided context.
-Use only the information from the context to answer questions.
-If the context doesn't contain relevant information, or if NO context chunks are provided at all, you must explicitly state that you cannot find the answer in the matched documents.
-
-CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
-1. After EVERY claim, fact, or piece of information in your answer, you MUST add an inline citation.
-2. Use this EXACT format: [Source N, Page X-Y] where N is the source number and X-Y is the page range.
-3. If a sentence combines information from multiple sources, cite all of them: [Source 1, Page 3-4][Source 2, Page 7]
-4. NEVER make a factual statement without a citation.
-5. If the context doesn't contain relevant information or is EMPTY, say so clearly.
-
-"The production rate increased by 15% in Q3 [Source 1, Page 5-6], while operational costs decreased due to automation [Source 2, Page 12]."
-"""
+        context = self._build_context(context_chunks)
+        prompt = system_prompt or _BASE_RAG_SYSTEM
 
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"},
         ]
 
         try:
@@ -467,7 +444,7 @@ CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
                 messages=messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,
-                stream=True
+                stream=True,
             )
             async for chunk in stream:
                 delta = chunk.choices[0].delta
@@ -480,36 +457,24 @@ CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
     async def generate_direct_response_stream(
         self,
         query: str,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
     ):
-        """
-        Stream a direct response without RAG context.
-        """
+        """Stream a direct response without RAG context."""
         if not self.client:
             raise ValueError("GROQ client not initialized")
-        
-        if system_prompt is None:
-            system_prompt = (
-                "You are an expert Petroleum Engineer with extensive experience in the oil and gas industry. "
-                "You can help users by answering questions, providing technical insights, and solving problems in this domain. "
-                "If the user's specific question seems outside the provided document scope, say that you cannot find the answer in the selected documents."
-                "\n\nFORMATTING RULES:"
-                "\n- Use markdown headers (##), bold text, and bullet points."
-                "\n- Keep technical explanations clear and concise."
-            )
-        
+
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query}
+            {"role": "system", "content": system_prompt or _DIRECT_RESPONSE_SYSTEM},
+            {"role": "user", "content": query},
         ]
-        
+
         try:
             stream = await self.client.chat.completions.create(
                 model=self.text_model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,
-                stream=True
+                stream=True,
             )
             async for chunk in stream:
                 delta = chunk.choices[0].delta
@@ -527,117 +492,24 @@ CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
         retrieved_images: Optional[List[Any]] = None,
         user_uploaded_images: Optional[List[str]] = None,
         max_retrieved_images: int = 3,
-        max_user_images: int = 5
+        max_user_images: int = 5,
     ):
-        """
-        Stream a multimodal response token-by-token.
-        Yields each content delta string.
-        Builds messages the same way as generate_multimodal_response.
-        """
+        """Stream a multimodal response token-by-token."""
         if not self.client:
             raise ValueError("GROQ client not initialized")
 
-        # Build context — same as generate_multimodal_response
-        context_parts = []
-        for i, chunk in enumerate(context_chunks, 1):
-            image_mention = ""
-            if hasattr(chunk, 'image_ids') and chunk.image_ids:
-                image_mention = f" [Contains {len(chunk.image_ids)} image(s)]"
-            context_parts.append(
-                f"[Source {i} - {chunk.section_title} "
-                f"(Pages {chunk.page_start}-{chunk.page_end})"
-                f"{image_mention}]\n{chunk.content}\n"
-            )
+        context_text = self._build_multimodal_context(
+            context_chunks, tables, retrieved_images, max_retrieved_images
+        )
 
-        if tables:
-            context_parts.append("\n=== RELEVANT TABLES ===\n")
-            for i, table in enumerate(tables, 1):
-                if hasattr(table, 'markdown_content'):
-                    content = table.markdown_content
-                    page = table.page_number
-                    title = table.section_title
-                else:
-                    content = table.get('markdown', '') or str(table)
-                    page = table.get('page_number', '?')
-                    title = table.get('section_title', '')
-                context_parts.append(f"[Table {i} - Section: {title} (Page {page})]\n{content}\n")
-
-        if retrieved_images:
-            context_parts.append("\n=== RELEVANT IMAGES ANALYSIS ===\n")
-            for i, img in enumerate(retrieved_images[:max_retrieved_images], 1):
-                analysis = getattr(img, 'analysis', '')
-                caption = getattr(img, 'caption', '') or "No caption"
-                title = getattr(img, 'section_title', '') or "No title"
-                page = getattr(img, 'page_number', '?')
-                info_parts = [f"Image {i}: {Path(img.image_path).name} (Page {page}, Section: {title})"]
-                if caption:
-                    info_parts.append(f"Caption: {caption}")
-                if analysis:
-                    info_parts.append(f"Analysis: {analysis}")
-                context_parts.append("\n".join(info_parts) + "\n")
-
-        context_text = "\n".join(context_parts)
-
-        system_content = """If the context doesn't contain relevant information, or if NO context chunks are provided at all, you must explicitly state that you cannot find the answer in the matched documents.
-
-FORMATTING RULES (CRITICAL):
-- Structure your answer with markdown: use ## headers to organize major sections
-- Use **bold** for key terms, values, and important findings
-- Use bullet points (- ) for listing multiple items, factors, or properties
-- Use numbered lists (1. 2. 3.) for sequential steps, ranked items, or procedures
-- Use tables (| col | col |) when comparing data or presenting structured information
-- Keep paragraphs short (2-3 sentences max)
-- Start with a brief 1-2 sentence summary, then provide detailed sections
-
-CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
-1. After EVERY claim, fact, or piece of information in your answer, you MUST add an inline citation.
-2. Use this EXACT format: [Source N, Page X-Y] where N is the source number and X-Y is the page range.
-3. If a sentence combines information from multiple sources, cite all of them: [Source 1, Page 3-4][Source 2, Page 7]
-4. NEVER make a factual statement without a citation.
-5. When images are provided, examine them carefully and reference them: [Image N, Page X]
-6. Describe what you see in images when relevant to the question.
-7. Combine information from both text and images for comprehensive answers.
-8. If the context doesn't contain relevant information or is EMPTY, say so clearly.
-
-Example format:
-"The production rate increased by 15% in Q3 [Source 1, Page 5-6]. The flow diagram shows the updated pipeline layout [Image 1, Page 8]."
-"""
-
-        user_content = [{"type": "text", "text": f"Context:\n{context_text}\n\nQuestion: {query}"}]
-
-        # Add retrieved images
-        if retrieved_images:
-            for img_obj in retrieved_images[:max_retrieved_images]:
-                img_path = getattr(img_obj, 'image_path', '')
-                if not img_path:
-                    continue
-                try:
-                    img_b64 = self._resize_image(img_path)
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{img_b64}", "detail": "low"}
-                    })
-                except Exception as e:
-                    logger.warning(f"Could not load retrieved image {img_path}: {e}")
-
-        # Add user uploaded images
-        if user_uploaded_images:
-            for img_path in user_uploaded_images[:max_user_images]:
-                try:
-                    img_b64 = self._resize_image(img_path)
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{img_b64}", "detail": "high"}
-                    })
-                except Exception as e:
-                    logger.warning(f"Could not load user image {img_path}: {e}")
+        user_content: list = [{"type": "text", "text": f"Context:\n{context_text}\n\nQuestion: {query}"}]
+        self._append_images(user_content, retrieved_images, user_uploaded_images, max_retrieved_images, max_user_images)
 
         messages = [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": user_content}
+            {"role": "system", "content": _BASE_MULTIMODAL_SYSTEM},
+            {"role": "user", "content": user_content},
         ]
 
-        # Try vision model first
         if retrieved_images or user_uploaded_images:
             try:
                 logger.info(f"Streaming vision model: {self.vision_model}")
@@ -646,27 +518,31 @@ Example format:
                     messages=messages,
                     temperature=self.settings.llm_temperature,
                     max_tokens=self.settings.llm_max_tokens,
-                    stream=True
+                    stream=True,
                 )
                 async for chunk in stream:
                     delta = chunk.choices[0].delta
                     if delta.content:
                         yield delta.content
-                return  # Vision model succeeded
+                return  # Vision succeeded
             except Exception as e:
-                logger.warning(f"Vision stream failed: {e}, falling back to text-only")
+                logger.warning(f"Vision stream failed: {e}. Falling back to text-only.")
 
         # Fallback: text-only stream
         try:
             stream = await self.client.chat.completions.create(
                 model=self.text_model,
                 messages=[
-                    {"role": "system", "content": system_content},
-                    {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {query}"}
+                    {"role": "system", "content": _BASE_RAG_SYSTEM},
+                    {"role": "user", "content": (
+                        f"Context:\n{context_text}\n\n"
+                        "Note: Images are referenced but could not be rendered in this mode.\n\n"
+                        f"Question: {query}"
+                    )},
                 ],
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,
-                stream=True
+                stream=True,
             )
             async for chunk in stream:
                 delta = chunk.choices[0].delta
@@ -675,36 +551,34 @@ Example format:
         except Exception as e:
             logger.error(f"Fallback stream also failed: {e}")
             raise
-    
+
+    # ==========================================================
+    # IMAGE UTILITIES
+    # ==========================================================
+
     def _resize_image(self, image_path: str) -> str:
-        """
-        Load and resize image if needed, return base64 string.
-        """
+        """Load and resize image if needed, return base64 string."""
         try:
             from PIL import Image
             import io
-            
+
             with Image.open(image_path) as img:
-                # Convert to RGB if needed
-                if img.mode in ('RGBA', 'P'):
-                    img = img.convert('RGB')
-                
-                # Resize if too large
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+
                 max_width = self.settings.max_image_width
                 if img.width > max_width:
                     ratio = max_width / img.width
                     new_height = int(img.height * ratio)
                     img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-                    logger.debug(f"Resized image {Path(image_path).name} to {max_width}x{new_height}")
-                
-                # Save to buffer
+                    logger.debug(f"Resized {Path(image_path).name} → {max_width}×{new_height}")
+
                 buf = io.BytesIO()
                 img.save(buf, format="png", quality=85)
                 return base64.b64encode(buf.getvalue()).decode()
-                
+
         except Exception as e:
             logger.warning(f"Error resizing image {image_path}: {e}")
-            # Fallback to original
             with open(image_path, "rb") as f:
                 return base64.b64encode(f.read()).decode()
 
@@ -712,73 +586,60 @@ Example format:
         self,
         image: ExtractedImage,
         query: Optional[str] = None,
-        context_text: Optional[str] = None
+        context_text: Optional[str] = None,
     ) -> str:
-        """
-        Analyze a single image using vision model.
-        
-        Args:
-            image: ExtractedImage object with path
-            query: Optional specific question about the image
-            context_text: Optional surrounding text from document
-            
-        Returns:
-            Image analysis/description
-        """
+        """Analyze a single image using vision model."""
         if not self.client:
             raise ValueError("GROQ client not initialized")
-        
+
         if not Path(image.image_path).exists():
             return f"Image not available: {image.image_path}"
-        
-        # Load and resize image
+
         image_data = self._resize_image(image.image_path)
-        
-        # Build prompt
-        context_part = ""
-        if context_text:
-            context_part = f"Context from document regarding this image:\n{context_text}\n\n"
-            
+
+        context_part = f"Context from surrounding document text:\n{context_text}\n\n" if context_text else ""
+
         if query:
-            prompt = f"{context_part}Analyze this image and answer: {query}"
-        else:
+            # Targeted question: respond in question's language
             prompt = (
-                f"{context_part}Describe this image in detail, including any text, charts, diagrams, or figures present. "
-                "Use the provided context to improve accuracy if relevant, but prioritize visual observations."
+                f"{context_part}"
+                f"Using the image and any provided context, answer this specific question:\n{query}\n\n"
+                "If the image does not contain enough information, state that clearly."
             )
-        
-        # Prepare messages
+        else:
+            # Generic analysis: use structured system prompt
+            prompt = (
+                f"{context_part}"
+                "Produce a structured technical analysis of this image following your system instructions."
+            )
+
         messages = [
+            {"role": "system", "content": _IMAGE_ANALYSIS_SYSTEM},
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{image_data}",
-                            "detail": "high"
-                        }
-                    }
-                ]
-            }
+                        "image_url": {"url": f"data:image/png;base64,{image_data}", "detail": "high"},
+                    },
+                ],
+            },
         ]
-        
+
         try:
             response = await self.client.chat.completions.create(
                 model=self.vision_model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
-                max_tokens=self.settings.llm_max_tokens
+                max_tokens=self.settings.llm_max_tokens,
             )
-            
             return response.choices[0].message.content
-            
         except Exception as e:
             logger.warning(f"Vision analysis failed: {e}")
             if image.caption:
                 return f"Image caption: {image.caption}"
-            return f"Image on page {image.page_number} ({image.width}x{image.height} {image.image_format})"
+            return f"Image on page {image.page_number} ({image.width}×{image.height} {image.image_format})"
 
 
 # Global LLM service instance
