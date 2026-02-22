@@ -28,6 +28,7 @@ class ChatMessage(BaseModel):
 class ChatSession(BaseModel):
     """Chat Session Metadata."""
     chat_id: str = Field(..., description="Unique chat session ID")
+    username: str = Field(..., description="Owner of the chat session")
     title: Optional[str] = Field(None, description="Chat title/summary")
     category_ids: Optional[List[str]] = Field(None, description="Linked category IDs")
     document_ids: Optional[List[str]] = Field(None, description="Linked document IDs")
@@ -38,6 +39,7 @@ class ChatSession(BaseModel):
 class ChatRequest(BaseModel):
     """Payload for sending a message."""
     message: str = Field(..., description="User message")
+    username: str = Field(..., description="The user's identifier")
     chat_id: Optional[str] = Field(None, description="Existing chat ID")
     category_ids: Optional[List[str]] = Field(None, description="Filter by categories")
     document_ids: Optional[List[str]] = Field(None, description="Filter by documents")
@@ -57,6 +59,7 @@ class ImageSearchResult(BaseModel):
 class ChatResponse(BaseModel):
     """Response from AI."""
     chat_id: str
+    username: str
     message_id: str
     answer: str
     sources: dict = Field(default_factory=dict, description="Sources map: document_id -> {filename, pages, ...}")

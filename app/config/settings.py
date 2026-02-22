@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     rerank_top_k: int = Field(default=10, alias="RERANK_TOP_K")
     similarity_threshold: float = Field(default=0.0, alias="SIMILARITY_THRESHOLD")
     top_k: int = Field(default=60, alias="TOP_K")
+    guard_threshold: float = Field(default=0.1, alias="GUARD_THRESHOLD")
     
     # Logging Configuration
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

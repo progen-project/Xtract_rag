@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 @router.post("", response_model=ChatResponse)
 async def chat(
     message: str = Form(...),
+    username: str = Form(...),
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
     document_ids: Optional[str] = Form(None),
@@ -62,6 +63,7 @@ async def chat(
     
     response = await controller.send_message(
         message=message,
+        username=username,
         chat_id=chat_id,
         category_ids=parsed_category_ids,
         document_ids=parsed_document_ids,
@@ -75,6 +77,7 @@ async def chat(
 @router.post("/stream")
 async def chat_stream(
     message: str = Form(...),
+    username: str = Form(...),
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
     document_ids: Optional[str] = Form(None),
@@ -121,6 +124,7 @@ async def chat_stream(
     return StreamingResponse(
         controller.send_message_stream(
             message=message,
+            username=username,
             chat_id=chat_id,
             category_ids=parsed_category_ids,
             document_ids=parsed_document_ids,
@@ -138,27 +142,30 @@ async def chat_stream(
 
 @router.get("", response_model=List[ChatSession])
 async def list_chats(
+    username: str,
     limit: int = 50,
     controller: ChatController = Depends(get_chat_controller)
 ):
     """List all chat sessions."""
-    return await controller.list_chats(limit)
+    return await controller.list_chats(username, limit)
 
 
 @router.get("/{chat_id}", response_model=ChatSession)
 async def get_chat(
     chat_id: str,
+    username: str,
     controller: ChatController = Depends(get_chat_controller)
 ):
     """Get a chat session."""
-    return await controller.get_chat(chat_id)
+    return await controller.get_chat(chat_id, username)
 
 
 @router.delete("/{chat_id}")
 async def delete_chat(
     chat_id: str,
+    username: str,
     controller: ChatController = Depends(get_chat_controller)
 ):
     """Delete a chat session."""
-    await controller.delete_chat(chat_id)
+    await controller.delete_chat(chat_id, username)
     return {"message": f"Chat {chat_id} deleted"}

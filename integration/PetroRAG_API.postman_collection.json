@@ -1389,6 +1389,12 @@
 									"description": "Required. User's question."
 								},
 								{
+									"key": "username",
+									"value": "petro_user_01",
+									"type": "text",
+									"description": "Required. The user's identifier."
+								},
+								{
 									"key": "chat_id",
 									"value": "",
 									"type": "text",
@@ -1425,7 +1431,7 @@
 								"chat"
 							]
 						},
-						"description": "Send a message (multipart/form-data for image support).\n\n**Form Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `message` | string | ✅ | User's question |\n| `chat_id` | string | ❌ | Continue existing chat |\n| `category_ids` | JSON string | ❌ | `'[\"id1\",\"id2\"]'` |\n| `images` | file[] | ❌ | Image attachments |\n\n**Response:** `ChatResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID (save this!) |\n| `message_id` | string | Message ID |\n| `answer` | string | AI response with inline citations |\n| `sources` | dict | `{doc_id: {filename, pages[]}}` |\n| `inline_citations` | InlineCitation[] | `[{source_number, document_id, filename, section_title, pages[]}]` |\n| `image_results` | ImageSearchResult[] | Retrieved images |"
+						"description": "Send a message (multipart/form-data for image support).\n\n**Form Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `message` | string | ✅ | User's question |\n| `username` | string | ✅ | The user's identifier |\n| `chat_id` | string | ❌ | Continue existing chat |\n| `category_ids` | JSON string | ❌ | `'[\"id1\",\"id2\"]'` |\n| `images` | file[] | ❌ | Image attachments |\n\n**Response:** `ChatResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID (save this!) |\n| `username` | string | Echo of username |\n| `message_id` | string | Message ID |\n| `answer` | string | AI response with inline citations |\n| `sources` | dict | `{doc_id: {filename, pages[]}}` |\n| `inline_citations` | InlineCitation[] | `[{source_number, document_id, filename, section_title, pages[]}]` |\n| `image_results` | ImageSearchResult[] | Retrieved images |"
 					},
 					"response": [
 						{
@@ -1452,6 +1458,12 @@
 											"description": "Required. User's question."
 										},
 										{
+											"key": "username",
+											"value": "petro_user_01",
+											"type": "text",
+											"description": "Required. The user's identifier."
+										},
+										{
 											"key": "chat_id",
 											"value": "",
 											"type": "text",
@@ -1469,12 +1481,6 @@
 											"value": "[\"{{document_id}}\"]",
 											"type": "text",
 											"description": "Optional. JSON array of document IDs."
-										},
-										{
-											"key": "top_k",
-											"value": "5",
-											"type": "text",
-											"description": "Chunks to retrieve (1-20, default 5)."
 										},
 										{
 											"key": "images",
@@ -1496,7 +1502,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"message_id\": \"msg_a1b2c3d4\",\n    \"answer\": \"Based on the drilling report [Source 1, Page 12], the well reached a total depth of 15,000 ft. The formation analysis [Source 2, Page 8] indicates high porosity in the target zone.\",\n    \"sources\": {\n        \"d0c1a2b3e4f5\": {\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"pages\": [\n                12,\n                13\n            ]\n        },\n        \"d0c1a2b3e4f6\": {\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"pages\": [\n                8\n            ]\n        }\n    },\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"section_title\": \"Drilling Summary\",\n            \"pages\": [\n                12\n            ]\n        },\n        {\n            \"source_number\": 2,\n            \"document_id\": \"d0c1a2b3e4f6\",\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"section_title\": \"Porosity Analysis\",\n            \"pages\": [\n                8\n            ]\n        }\n    ],\n    \"image_results\": [\n        {\n            \"image_id\": \"img_001\",\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"page_number\": 13,\n            \"section_title\": \"Well Diagram\",\n            \"caption\": \"Figure 4.1: Well Profile\",\n            \"image_path\": \"/static/images/d0c1a2b3e4f5/img_001.png\",\n            \"score\": 0.88\n        }\n    ]\n}"
+							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"username\": \"petro_user_01\",\n    \"message_id\": \"msg_a1b2c3d4\",\n    \"answer\": \"Based on the drilling report [Source 1, Page 12], the well reached a total depth of 15,000 ft. The formation analysis [Source 2, Page 8] indicates high porosity in the target zone.\",\n    \"sources\": {\n        \"d0c1a2b3e4f5\": {\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"pages\": [\n                12,\n                13\n            ]\n        },\n        \"d0c1a2b3e4f6\": {\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"pages\": [\n                8\n            ]\n        }\n    },\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"section_title\": \"Drilling Summary\",\n            \"pages\": [\n                12\n            ]\n        },\n        {\n            \"source_number\": 2,\n            \"document_id\": \"d0c1a2b3e4f6\",\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"section_title\": \"Porosity Analysis\",\n            \"pages\": [\n                8\n            ]\n        }\n    ],\n    \"image_results\": [\n        {\n            \"image_id\": \"img_001\",\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"page_number\": 13,\n            \"section_title\": \"Well Diagram\",\n            \"caption\": \"Figure 4.1: Well Profile\",\n            \"image_path\": \"/static/images/d0c1a2b3e4f5/img_001.png\",\n            \"score\": 0.88\n        }\n    ]\n}"
 						},
 						{
 							"name": "422 — Missing Message",
@@ -1537,6 +1543,11 @@
 								{
 									"key": "message",
 									"value": "Summarize the uploaded documents",
+									"type": "text"
+								},
+								{
+									"key": "username",
+									"value": "petro_user_01",
 									"type": "text"
 								},
 								{
@@ -1612,7 +1623,7 @@
 					"request": {
 						"method": "GET",
 						"url": {
-							"raw": "{{base_url}}/chat?limit=50",
+							"raw": "{{base_url}}/chat?username=petro_user_01&limit=50",
 							"host": [
 								"{{base_url}}"
 							],
@@ -1621,13 +1632,18 @@
 							],
 							"query": [
 								{
+									"key": "username",
+									"value": "petro_user_01",
+									"description": "Required. The user's sessions to list."
+								},
+								{
 									"key": "limit",
 									"value": "50",
 									"description": "Max sessions (default 50)"
 								}
 							]
 						},
-						"description": "List all chat sessions.\n\n**Response:** `ChatSession[]`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID |\n| `category_ids` | string[]? | Linked categories |\n| `messages` | ChatMessage[] | All messages |\n| `created_at` | datetime | Created |\n| `updated_at` | datetime | Last activity |"
+						"description": "List all chat sessions for a user.\n\n**Response:** `ChatSession[]`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID |\n| `username` | string | Echo of username |\n| `category_ids` | string[]? | Linked categories |\n| `messages` | ChatMessage[] | All messages |\n| `created_at` | datetime | Created |\n| `updated_at` | datetime | Last activity |"
 					},
 					"response": [
 						{
@@ -1636,12 +1652,22 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/chat?limit=50",
+									"raw": "{{base_url}}/chat?username=petro_user_01&limit=50",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"chat"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
 									]
 								}
 							},
@@ -1655,7 +1681,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "[\n    {\n        \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n        \"category_ids\": [\n            \"a1b2c3d4e5f6\"\n        ],\n        \"messages\": [\n            {\n                \"message_id\": \"msg_u001\",\n                \"role\": \"user\",\n                \"content\": \"What is the total depth?\",\n                \"image_paths\": [],\n                \"sources\": null,\n                \"timestamp\": \"2024-06-15T10:00:00\"\n            },\n            {\n                \"message_id\": \"msg_a001\",\n                \"role\": \"assistant\",\n                \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n                \"image_paths\": [],\n                \"sources\": {\n                    \"d0c1a2b3e4f5\": {\n                        \"filename\": \"Well_Report_2024.pdf\",\n                        \"pages\": [\n                            12\n                        ]\n                    }\n                },\n                \"timestamp\": \"2024-06-15T10:00:05\"\n            }\n        ],\n        \"created_at\": \"2024-06-15T10:00:00\",\n        \"updated_at\": \"2024-06-15T10:00:05\"\n    }\n]"
+							"body": "[\n    {\n        \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n        \"username\": \"petro_user_01\",\n        \"category_ids\": [\n            \"a1b2c3d4e5f6\"\n        ],\n        \"messages\": [\n            {\n                \"message_id\": \"msg_u001\",\n                \"role\": \"user\",\n                \"content\": \"What is the total depth?\",\n                \"image_paths\": [],\n                \"sources\": null,\n                \"timestamp\": \"2024-06-15T10:00:00\"\n            },\n            {\n                \"message_id\": \"msg_a001\",\n                \"role\": \"assistant\",\n                \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n                \"image_paths\": [],\n                \"sources\": {\n                    \"d0c1a2b3e4f5\": {\n                        \"filename\": \"Well_Report_2024.pdf\",\n                        \"pages\": [\n                            12\n                        ]\n                    }\n                },\n                \"timestamp\": \"2024-06-15T10:00:05\"\n            }\n        ],\n        \"created_at\": \"2024-06-15T10:00:00\",\n        \"updated_at\": \"2024-06-15T10:00:05\"\n    }\n]"
 						}
 					]
 				},
@@ -1664,13 +1690,20 @@
 					"request": {
 						"method": "GET",
 						"url": {
-							"raw": "{{base_url}}/chat/{{chat_id}}",
+							"raw": "{{base_url}}/chat/{{chat_id}}?username=petro_user_01",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"chat",
 								"{{chat_id}}"
+							],
+							"query": [
+								{
+									"key": "username",
+									"value": "petro_user_01",
+									"description": "Required. Verification of ownership."
+								}
 							]
 						},
 						"description": "Get full chat session with all messages.\n\n**Response:** `ChatSession`"
@@ -1682,13 +1715,19 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/chat/{{chat_id}}",
+									"raw": "{{base_url}}/chat/{{chat_id}}?username=petro_user_01",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"chat",
 										"{{chat_id}}"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										}
 									]
 								}
 							},
@@ -1702,7 +1741,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"category_ids\": [\n        \"a1b2c3d4e5f6\"\n    ],\n    \"messages\": [\n        {\n            \"message_id\": \"msg_u001\",\n            \"role\": \"user\",\n            \"content\": \"What is the total depth?\",\n            \"image_paths\": [],\n            \"sources\": null,\n            \"timestamp\": \"2024-06-15T10:00:00\"\n        },\n        {\n            \"message_id\": \"msg_a001\",\n            \"role\": \"assistant\",\n            \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n            \"image_paths\": [],\n            \"sources\": {\n                \"d0c1a2b3e4f5\": {\n                    \"filename\": \"Well_Report_2024.pdf\",\n                    \"pages\": [\n                        12\n                    ]\n                }\n            },\n            \"timestamp\": \"2024-06-15T10:00:05\"\n        }\n    ],\n    \"created_at\": \"2024-06-15T10:00:00\",\n    \"updated_at\": \"2024-06-15T10:00:05\"\n}"
+							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"username\": \"petro_user_01\",\n    \"category_ids\": [\n        \"a1b2c3d4e5f6\"\n    ],\n    \"messages\": [\n        {\n            \"message_id\": \"msg_u001\",\n            \"role\": \"user\",\n            \"content\": \"What is the total depth?\",\n            \"image_paths\": [],\n            \"sources\": null,\n            \"timestamp\": \"2024-06-15T10:00:00\"\n        },\n        {\n            \"message_id\": \"msg_a001\",\n            \"role\": \"assistant\",\n            \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n            \"image_paths\": [],\n            \"sources\": {\n                \"d0c1a2b3e4f5\": {\n                    \"filename\": \"Well_Report_2024.pdf\",\n                    \"pages\": [\n                        12\n                    ]\n                }\n            },\n            \"timestamp\": \"2024-06-15T10:00:05\"\n        }\n    ],\n    \"created_at\": \"2024-06-15T10:00:00\",\n    \"updated_at\": \"2024-06-15T10:00:05\"\n}"
 						},
 						{
 							"name": "404 — Not Found",
@@ -1710,13 +1749,19 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/chat/bad_id",
+									"raw": "{{base_url}}/chat/bad_id?username=petro_user_01",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"chat",
 										"bad_id"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										}
 									]
 								}
 							},
@@ -1739,13 +1784,20 @@
 					"request": {
 						"method": "DELETE",
 						"url": {
-							"raw": "{{base_url}}/chat/{{chat_id}}",
+							"raw": "{{base_url}}/chat/{{chat_id}}?username=petro_user_01",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"chat",
 								"{{chat_id}}"
+							],
+							"query": [
+								{
+									"key": "username",
+									"value": "petro_user_01",
+									"description": "Required. Verification of ownership."
+								}
 							]
 						},
 						"description": "Delete a chat session and all messages.\n\n**Response:** `{message}`"
@@ -1757,13 +1809,19 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/chat/{{chat_id}}",
+									"raw": "{{base_url}}/chat/{{chat_id}}?username=petro_user_01",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"chat",
 										"{{chat_id}}"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										}
 									]
 								}
 							},
@@ -1785,13 +1843,19 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/chat/bad_id",
+									"raw": "{{base_url}}/chat/bad_id?username=petro_user_01",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"chat",
 										"bad_id"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										}
 									]
 								}
 							},
@@ -1827,7 +1891,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ],\n    \"top_k\": 5,\n    \"include_images\": true,\n    \"include_tables\": true\n}"
+							"raw": "{\n    \"query\": \"What are the production statistics for Q3?\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ],\n    \"include_images\": true,\n    \"include_tables\": true\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/query",
@@ -1838,7 +1902,7 @@
 								"query"
 							]
 						},
-						"description": "One-shot RAG query.\n\n**Request Body (JSON):**\n| Field | Type | Required | Default |\n|-------|------|----------|---------|\n| `query` | string | ✅ | — |\n| `category_ids` | string[] | ❌ | all |\n| `document_ids` | string[] | ❌ | all |\n| `top_k` | int (1-20) | ❌ | 5 |\n| `include_images` | bool | ❌ | true |\n| `include_tables` | bool | ❌ | true |\n\n**Response:** `QueryResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query` | string | Original query |\n| `answer` | string | AI answer |\n| `retrieved_chunks` | RetrievedChunk[] | Context chunks |\n| `sources` | string[] | Document IDs used |\n| `inline_citations` | dict[] | Structured citations |"
+						"description": "One-shot RAG query.\n\n**Request Body (JSON):**\n| Field | Type | Required | Default |\n|-------|------|----------|---------|\n| `query` | string | ✅ | — |\n| `category_ids` | string[] | ❌ | all |\n| `document_ids` | string[] | ❌ | all |\n| `include_images` | bool | ❌ | true |\n| `include_tables` | bool | ❌ | true |\n\n**Response:** `QueryResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query` | string | Original query |\n| `answer` | string | AI answer |\n| `retrieved_chunks` | RetrievedChunk[] | Context chunks |\n| `sources` | string[] | Document IDs used |\n| `inline_citations` | dict[] | Structured citations |"
 					},
 					"response": [
 						{
@@ -1862,7 +1926,7 @@
 								},
 								"body": {
 									"mode": "raw",
-									"raw": "{\"query\": \"What are the production statistics for Q3?\", \"top_k\": 5}"
+									"raw": "{\"query\": \"What are the production statistics for Q3?\"}"
 								}
 							},
 							"status": "OK",
@@ -1898,7 +1962,7 @@
 								},
 								"body": {
 									"mode": "raw",
-									"raw": "{\"top_k\": 5}"
+									"raw": "{}"
 								}
 							},
 							"status": "Unprocessable Entity",
@@ -1927,7 +1991,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ],\n    \"top_k\": 5\n}"
+							"raw": "{\n    \"query_text\": \"production flowchart diagram\",\n    \"category_ids\": [\n        \"{{category_id}}\"\n    ]\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/query/image-search",
@@ -1939,7 +2003,7 @@
 								"image-search"
 							]
 						},
-						"description": "Search for images by text or image similarity.\n\n**Request Body (JSON):**\n| Field | Type | Required |\n|-------|------|----------|\n| `query_text` | string | ❌ (one of text/image required) |\n| `query_image_base64` | string | ❌ |\n| `category_ids` | string[] | ❌ |\n| `document_ids` | string[] | ❌ |\n| `top_k` | int (1-20) | ❌ (default 5) |\n\n**Response:** `ImageSearchResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query_text` | string? | Echo of input |\n| `has_query_image` | bool | Whether image was provided |\n| `results` | ImageSearchResult[] | Matched images |\n| `count` | int | Number of results |"
+						"description": "Search for images by text or image similarity.\n\n**Request Body (JSON):**\n| Field | Type | Required |\n|-------|------|----------|\n| `query_text` | string | ❌ (one of text/image required) |\n| `query_image_base64` | string | ❌ |\n| `category_ids` | string[] | ❌ |\n| `document_ids` | string[] | ❌ |\n\n**Response:** `ImageSearchResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `query_text` | string? | Echo of input |\n| `has_query_image` | bool | Whether image was provided |\n| `results` | ImageSearchResult[] | Matched images |\n| `count` | int | Number of results |"
 					},
 					"response": [
 						{
@@ -1964,7 +2028,7 @@
 								},
 								"body": {
 									"mode": "raw",
-									"raw": "{\"query_text\": \"production flowchart\", \"top_k\": 5}"
+									"raw": "{\"query_text\": \"production flowchart\"}"
 								}
 							},
 							"status": "OK",
@@ -3019,6 +3083,12 @@
 									"description": "Required. User's question."
 								},
 								{
+									"key": "username",
+									"value": "petro_user_01",
+									"type": "text",
+									"description": "Required. The user's identifier."
+								},
+								{
 									"key": "chat_id",
 									"value": "",
 									"type": "text",
@@ -3072,6 +3142,12 @@
 											"description": "Required. User's question."
 										},
 										{
+											"key": "username",
+											"value": "petro_user_01",
+											"type": "text",
+											"description": "Required. The user's identifier."
+										},
+										{
 											"key": "chat_id",
 											"value": "",
 											"type": "text",
@@ -3089,12 +3165,6 @@
 											"value": "[\"{{document_id}}\"]",
 											"type": "text",
 											"description": "Optional. JSON array of document IDs."
-										},
-										{
-											"key": "top_k",
-											"value": "5",
-											"type": "text",
-											"description": "Chunks to retrieve (1-20, default 5)."
 										},
 										{
 											"key": "images",
@@ -3116,7 +3186,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"message_id\": \"msg_a1b2c3d4\",\n    \"answer\": \"Based on the drilling report [Source 1, Page 12], the well reached a total depth of 15,000 ft. The formation analysis [Source 2, Page 8] indicates high porosity in the target zone.\",\n    \"sources\": {\n        \"d0c1a2b3e4f5\": {\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"pages\": [\n                12,\n                13\n            ]\n        },\n        \"d0c1a2b3e4f6\": {\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"pages\": [\n                8\n            ]\n        }\n    },\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"section_title\": \"Drilling Summary\",\n            \"pages\": [\n                12\n            ]\n        },\n        {\n            \"source_number\": 2,\n            \"document_id\": \"d0c1a2b3e4f6\",\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"section_title\": \"Porosity Analysis\",\n            \"pages\": [\n                8\n            ]\n        }\n    ],\n    \"image_results\": [\n        {\n            \"image_id\": \"img_001\",\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"page_number\": 13,\n            \"section_title\": \"Well Diagram\",\n            \"caption\": \"Figure 4.1: Well Profile\",\n            \"image_path\": \"/static/images/d0c1a2b3e4f5/img_001.png\",\n            \"score\": 0.88\n        }\n    ]\n}"
+							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"username\": \"petro_user_01\",\n    \"message_id\": \"msg_a1b2c3d4\",\n    \"answer\": \"Based on the drilling report [Source 1, Page 12], the well reached a total depth of 15,000 ft. The formation analysis [Source 2, Page 8] indicates high porosity in the target zone.\",\n    \"sources\": {\n        \"d0c1a2b3e4f5\": {\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"pages\": [\n                12,\n                13\n            ]\n        },\n        \"d0c1a2b3e4f6\": {\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"pages\": [\n                8\n            ]\n        }\n    },\n    \"inline_citations\": [\n        {\n            \"source_number\": 1,\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"filename\": \"Well_Report_2024.pdf\",\n            \"section_title\": \"Drilling Summary\",\n            \"pages\": [\n                12\n            ]\n        },\n        {\n            \"source_number\": 2,\n            \"document_id\": \"d0c1a2b3e4f6\",\n            \"filename\": \"Formation_Analysis.pdf\",\n            \"section_title\": \"Porosity Analysis\",\n            \"pages\": [\n                8\n            ]\n        }\n    ],\n    \"image_results\": [\n        {\n            \"image_id\": \"img_001\",\n            \"document_id\": \"d0c1a2b3e4f5\",\n            \"page_number\": 13,\n            \"section_title\": \"Well Diagram\",\n            \"caption\": \"Figure 4.1: Well Profile\",\n            \"image_path\": \"/static/images/d0c1a2b3e4f5/img_001.png\",\n            \"score\": 0.88\n        }\n    ]\n}"
 						}
 					]
 				},
@@ -3134,6 +3204,10 @@
 							],
 							"query": [
 								{
+									"key": "username",
+									"value": "petro_user_01"
+								},
+								{
 									"key": "limit",
 									"value": "50"
 								}
@@ -3148,12 +3222,22 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{client_url}}/chat?limit=50",
+									"raw": "{{client_url}}/chat?username=petro_user_01&limit=50",
 									"host": [
 										"{{client_url}}"
 									],
 									"path": [
 										"chat"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
 									]
 								}
 							},
@@ -3167,7 +3251,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "[\n    {\n        \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n        \"category_ids\": [\n            \"a1b2c3d4e5f6\"\n        ],\n        \"messages\": [\n            {\n                \"message_id\": \"msg_u001\",\n                \"role\": \"user\",\n                \"content\": \"What is the total depth?\",\n                \"image_paths\": [],\n                \"sources\": null,\n                \"timestamp\": \"2024-06-15T10:00:00\"\n            },\n            {\n                \"message_id\": \"msg_a001\",\n                \"role\": \"assistant\",\n                \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n                \"image_paths\": [],\n                \"sources\": {\n                    \"d0c1a2b3e4f5\": {\n                        \"filename\": \"Well_Report_2024.pdf\",\n                        \"pages\": [\n                            12\n                        ]\n                    }\n                },\n                \"timestamp\": \"2024-06-15T10:00:05\"\n            }\n        ],\n        \"created_at\": \"2024-06-15T10:00:00\",\n        \"updated_at\": \"2024-06-15T10:00:05\"\n    }\n]"
+							"body": "[\n    {\n        \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n        \"username\": \"petro_user_01\",\n        \"category_ids\": [\n            \"a1b2c3d4e5f6\"\n        ],\n        \"messages\": [\n            {\n                \"message_id\": \"msg_u001\",\n                \"role\": \"user\",\n                \"content\": \"What is the total depth?\",\n                \"image_paths\": [],\n                \"sources\": null,\n                \"timestamp\": \"2024-06-15T10:00:00\"\n            },\n            {\n                \"message_id\": \"msg_a001\",\n                \"role\": \"assistant\",\n                \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n                \"image_paths\": [],\n                \"sources\": {\n                    \"d0c1a2b3e4f5\": {\n                        \"filename\": \"Well_Report_2024.pdf\",\n                        \"pages\": [\n                            12\n                        ]\n                    }\n                },\n                \"timestamp\": \"2024-06-15T10:00:05\"\n            }\n        ],\n        \"created_at\": \"2024-06-15T10:00:00\",\n        \"updated_at\": \"2024-06-15T10:00:05\"\n    }\n]"
 						}
 					]
 				},
@@ -3183,6 +3267,12 @@
 							"path": [
 								"chat",
 								"{{chat_id}}"
+							],
+							"query": [
+								{
+									"key": "username",
+									"value": "petro_user_01"
+								}
 							]
 						},
 						"description": "(Proxy) Get session."
@@ -3194,13 +3284,19 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{client_url}}/chat/{{chat_id}}",
+									"raw": "{{client_url}}/chat/{{chat_id}}?username=petro_user_01",
 									"host": [
 										"{{client_url}}"
 									],
 									"path": [
 										"chat",
 										"{{chat_id}}"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										}
 									]
 								}
 							},
@@ -3214,7 +3310,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"category_ids\": [\n        \"a1b2c3d4e5f6\"\n    ],\n    \"messages\": [\n        {\n            \"message_id\": \"msg_u001\",\n            \"role\": \"user\",\n            \"content\": \"What is the total depth?\",\n            \"image_paths\": [],\n            \"sources\": null,\n            \"timestamp\": \"2024-06-15T10:00:00\"\n        },\n        {\n            \"message_id\": \"msg_a001\",\n            \"role\": \"assistant\",\n            \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n            \"image_paths\": [],\n            \"sources\": {\n                \"d0c1a2b3e4f5\": {\n                    \"filename\": \"Well_Report_2024.pdf\",\n                    \"pages\": [\n                        12\n                    ]\n                }\n            },\n            \"timestamp\": \"2024-06-15T10:00:05\"\n        }\n    ],\n    \"created_at\": \"2024-06-15T10:00:00\",\n    \"updated_at\": \"2024-06-15T10:00:05\"\n}"
+							"body": "{\n    \"chat_id\": \"c1h2a3t4-abcd-efgh-ijkl-567890\",\n    \"username\": \"petro_user_01\",\n    \"category_ids\": [\n        \"a1b2c3d4e5f6\"\n    ],\n    \"messages\": [\n        {\n            \"message_id\": \"msg_u001\",\n            \"role\": \"user\",\n            \"content\": \"What is the total depth?\",\n            \"image_paths\": [],\n            \"sources\": null,\n            \"timestamp\": \"2024-06-15T10:00:00\"\n        },\n        {\n            \"message_id\": \"msg_a001\",\n            \"role\": \"assistant\",\n            \"content\": \"Based on the report, the total depth is 15,000 ft.\",\n            \"image_paths\": [],\n            \"sources\": {\n                \"d0c1a2b3e4f5\": {\n                    \"filename\": \"Well_Report_2024.pdf\",\n                    \"pages\": [\n                        12\n                    ]\n                }\n            },\n            \"timestamp\": \"2024-06-15T10:00:05\"\n        }\n    ],\n    \"created_at\": \"2024-06-15T10:00:00\",\n    \"updated_at\": \"2024-06-15T10:00:05\"\n}"
 						},
 						{
 							"name": "404 — Not Found",
@@ -3222,13 +3318,19 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{client_url}}/chat/bad_id",
+									"raw": "{{client_url}}/chat/bad_id?username=petro_user_01",
 									"host": [
 										"{{client_url}}"
 									],
 									"path": [
 										"chat",
 										"bad_id"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										}
 									]
 								}
 							},
@@ -3258,6 +3360,12 @@
 							"path": [
 								"chat",
 								"{{chat_id}}"
+							],
+							"query": [
+								{
+									"key": "username",
+									"value": "petro_user_01"
+								}
 							]
 						},
 						"description": "(Proxy) Delete session."
@@ -3269,13 +3377,19 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{client_url}}/chat/{{chat_id}}",
+									"raw": "{{client_url}}/chat/{{chat_id}}?username=petro_user_01",
 									"host": [
 										"{{client_url}}"
 									],
 									"path": [
 										"chat",
 										"{{chat_id}}"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										}
 									]
 								}
 							},
@@ -3297,13 +3411,19 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{client_url}}/chat/bad_id",
+									"raw": "{{client_url}}/chat/bad_id?username=petro_user_01",
 									"host": [
 										"{{client_url}}"
 									],
 									"path": [
 										"chat",
 										"bad_id"
+									],
+									"query": [
+										{
+											"key": "username",
+											"value": "petro_user_01"
+										}
 									]
 								}
 							},
@@ -3343,7 +3463,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\"query\": \"What are the key metrics?\", \"top_k\": 5}"
+							"raw": "{\"query\": \"What are the key metrics?\"}"
 						}
 					},
 					"response": [
@@ -3368,7 +3488,7 @@
 								},
 								"body": {
 									"mode": "raw",
-									"raw": "{\"query\": \"What are the production statistics for Q3?\", \"top_k\": 5}"
+									"raw": "{\"query\": \"What are the production statistics for Q3?\"}"
 								}
 							},
 							"status": "OK",
@@ -3408,7 +3528,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\"query_text\": \"flowchart\", \"top_k\": 5}"
+							"raw": "{\"query_text\": \"flowchart\"}"
 						}
 					},
 					"response": [
@@ -3434,7 +3554,7 @@
 								},
 								"body": {
 									"mode": "raw",
-									"raw": "{\"query_text\": \"production flowchart\", \"top_k\": 5}"
+									"raw": "{\"query_text\": \"production flowchart\"}"
 								}
 							},
 							"status": "OK",

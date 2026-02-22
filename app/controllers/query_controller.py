@@ -21,10 +21,11 @@ logger = logging.getLogger(__name__)
 class QueryController:
     """Controller for query operations."""
     
-    def __init__(self, indexer, llm_service, document_repo):
+    def __init__(self, indexer, llm_service, document_repo, guard=None):
         self.indexer = indexer
         self.llm = llm_service
         self.document_repo = document_repo
+        self.guard = guard
     
     async def query(self, request: QueryRequest) -> QueryResponse:
         """Perform a RAG query."""
@@ -32,6 +33,25 @@ class QueryController:
         self.indexer.initialize()
         self.llm.initialize()
         
+        # ========================================
+        # GUARD CHECK
+        # ========================================
+        is_relevant = True
+        if self.guard:
+            is_relevant = self.guard.check(request.query)
+            logger.info(f"LLM Guard relevance (Query): {is_relevant}")
+
+        if not is_relevant:
+            logger.info("Query irrelevant to domain. Using direct path.")
+            answer = await self.llm.generate_direct_response(request.query)
+            return QueryResponse(
+                query=request.query,
+                answer=answer,
+                retrieved_chunks=[],
+                sources=[],
+                inline_citations=[]
+            )
+
         # Retrieve relevant chunks
         retrieved_chunks = self.indexer.query(
             query_text=request.query,

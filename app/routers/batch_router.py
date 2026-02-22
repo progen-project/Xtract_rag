@@ -39,12 +39,7 @@ async def get_batch_progress(
     """Stream upload progress using Server-Sent Events (SSE)."""
     return StreamingResponse(
         status_manager.stream_status(batch_id),
-        media_type="text/event-stream",
-        headers={
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",
-        "Connection": "keep-alive",
-        }
+        media_type="text/event-stream"
     )
 
 

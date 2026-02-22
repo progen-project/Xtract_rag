@@ -183,37 +183,38 @@ async def stream_batch_progress(batch_id: str):
 
 # --- Chat ---
 @router.get("/chat", response_model=List[ChatSession], tags=["Chat"])
-async def list_chats(limit: int = 50):
-    cache_key = f"list_chats:{limit}"
+async def list_chats(username: str, limit: int = 50):
+    cache_key = f"list_chats:{username}:{limit}"
     cached = await chat_cache.get(cache_key)
     if cached:
         return cached
 
-    chats = await rag_service.list_chats(limit)
+    chats = await rag_service.list_chats(username, limit)
     await chat_cache.set(cache_key, chats)
     return chats
 
 @router.get("/chat/{chat_id}", response_model=ChatSession, tags=["Chat"])
-async def get_chat(chat_id: str):
-    cache_key = f"get_chat:{chat_id}"
+async def get_chat(chat_id: str, username: str):
+    cache_key = f"get_chat:{username}:{chat_id}"
     cached = await chat_cache.get(cache_key)
     if cached:
         return cached
 
-    chat = await rag_service.get_chat(chat_id)
+    chat = await rag_service.get_chat(chat_id, username)
     await chat_cache.set(cache_key, chat)
     return chat
 
 @router.delete("/chat/{chat_id}", tags=["Chat"])
-async def delete_chat(chat_id: str):
-    result = await rag_service.delete_chat(chat_id)
-    await chat_cache.invalidate(f"get_chat:{chat_id}")
-    await chat_cache.invalidate_prefix("list_chats")
+async def delete_chat(chat_id: str, username: str):
+    result = await rag_service.delete_chat(chat_id, username)
+    await chat_cache.invalidate(f"get_chat:{username}:{chat_id}")
+    await chat_cache.invalidate_prefix(f"list_chats:{username}")
     return result
 
 @router.post("/chat", response_model=ChatResponse, tags=["Chat"])
 async def send_message(
     message: str = Form(...),
+    username: str = Form(...),
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
     document_ids: Optional[str] = Form(None),
@@ -243,6 +244,7 @@ async def send_message(
 
     request = ChatRequest(
         message=message,
+        username=username,
         chat_id=chat_id,
         category_ids=parsed_category_ids,
         document_ids=parsed_document_ids,
@@ -257,15 +259,16 @@ async def send_message(
         
     result = await rag_service.send_message(request, image_files)
     
-    await chat_cache.invalidate_prefix("list_chats")
+    await chat_cache.invalidate_prefix(f"list_chats:{username}")
     if result.chat_id:
-        await chat_cache.invalidate(f"get_chat:{result.chat_id}")
+        await chat_cache.invalidate(f"get_chat:{username}:{result.chat_id}")
         
     return result
 
 @router.post("/chat/stream", tags=["Chat"])
 async def stream_message(
     message: str = Form(...),
+    username: str = Form(...),
     chat_id: Optional[str] = Form(None),
     category_ids: Optional[str] = Form(None),
     document_ids: Optional[str] = Form(None),
@@ -276,7 +279,7 @@ async def stream_message(
     Returns Server-Sent Events with word-by-word response tokens.
     """
     # Build form data for backend
-    data = {"message": message}
+    data = {"message": message, "username": username}
     if chat_id:
         data["chat_id"] = chat_id
     if category_ids:
@@ -301,9 +304,9 @@ async def stream_message(
                 timeout=None
             ) as response:
                 # Invalidate cache on stream start
-                await chat_cache.invalidate_prefix("list_chats")
+                await chat_cache.invalidate_prefix(f"list_chats:{username}")
                 if chat_id:
-                    await chat_cache.invalidate(f"get_chat:{chat_id}")
+                    await chat_cache.invalidate(f"get_chat:{username}:{chat_id}")
                     
                 async for line in response.aiter_lines():
                     if line.strip():

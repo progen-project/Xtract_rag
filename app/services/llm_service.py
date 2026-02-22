@@ -111,6 +111,46 @@ Example format:
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             raise
+
+    async def generate_direct_response(
+        self,
+        query: str,
+        system_prompt: Optional[str] = None
+    ) -> str:
+        """
+        Generate a direct response without RAG context.
+        Used for queries evaluated as non-relevant by LLM Guard.
+        """
+        if not self.client:
+            raise ValueError("GROQ client not initialized")
+        
+        if system_prompt is None:
+            system_prompt = (
+                "You are an expert Petroleum Engineer with extensive experience in the oil and gas industry. "
+                "You can help users by answering questions, providing technical insights, and solving problems in this domain. "
+                "Even if the user's specific question seems outside the provided document scope, "
+                "you should still provide a helpful, professional response based on your deep engineering expertise. "
+                "\n\nFORMATTING RULES:"
+                "\n- Use markdown headers (##), bold text, and bullet points."
+                "\n- Keep technical explanations clear and concise."
+            )
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ]
+        
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.text_model,
+                messages=messages,
+                temperature=self.settings.llm_temperature,
+                max_tokens=self.settings.llm_max_tokens
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Error in direct generation: {e}")
+            raise
     
     async def generate_multimodal_response(
         self,
@@ -435,6 +475,48 @@ CITATION RULES (CRITICAL - YOU MUST FOLLOW THESE EXACTLY):
                     yield delta.content
         except Exception as e:
             logger.error(f"Error streaming response: {e}")
+            raise
+
+    async def generate_direct_response_stream(
+        self,
+        query: str,
+        system_prompt: Optional[str] = None
+    ):
+        """
+        Stream a direct response without RAG context.
+        """
+        if not self.client:
+            raise ValueError("GROQ client not initialized")
+        
+        if system_prompt is None:
+            system_prompt = (
+                "You are an expert Petroleum Engineer with extensive experience in the oil and gas industry. "
+                "You can help users by answering questions, providing technical insights, and solving problems in this domain. "
+                "If the user's specific question seems outside the provided document scope, say that you cannot find the answer in the selected documents."
+                "\n\nFORMATTING RULES:"
+                "\n- Use markdown headers (##), bold text, and bullet points."
+                "\n- Keep technical explanations clear and concise."
+            )
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ]
+        
+        try:
+            stream = await self.client.chat.completions.create(
+                model=self.text_model,
+                messages=messages,
+                temperature=self.settings.llm_temperature,
+                max_tokens=self.settings.llm_max_tokens,
+                stream=True
+            )
+            async for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    yield delta.content
+        except Exception as e:
+            logger.error(f"Error in direct streaming: {e}")
             raise
 
     async def generate_multimodal_response_stream(

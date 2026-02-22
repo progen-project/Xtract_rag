@@ -35,13 +35,15 @@ class ChatController:
         indexer,
         llm_service,
         settings,
-        document_repo
+        document_repo,
+        guard=None
     ):
         self.chat_repo = chat_repo
         self.indexer = indexer
         self.llm = llm_service
         self.settings = settings
         self.document_repo = document_repo
+        self.guard = guard
         
         # Initialize new services
         self.search_service = UnifiedSearchService(
@@ -55,6 +57,7 @@ class ChatController:
     async def send_message(
         self,
         message: str,
+        username: str,
         chat_id: Optional[str] = None,
         category_ids: Optional[List[str]] = None,
         document_ids: Optional[List[str]] = None,
@@ -79,9 +82,9 @@ class ChatController:
         is_new_chat = chat_id is None
         if is_new_chat:
             chat_id = f"chat_{uuid.uuid4().hex[:12]}"
-            await self.chat_repo.create(chat_id, category_ids, document_ids)
+            await self.chat_repo.create(chat_id, username, category_ids, document_ids)
         else:
-            existing_chat = await self.chat_repo.get_by_id(chat_id)
+            existing_chat = await self.chat_repo.get_by_id(chat_id, username)
             if not existing_chat:
                 raise ChatNotFoundError(chat_id)
             if category_ids is None:
@@ -110,9 +113,43 @@ class ChatController:
         # Initialize services
         self.indexer.initialize()
         self.llm.initialize()
-        
+
         # ========================================
-        # STEP 1: UNIFIED SEARCH
+        # STEP 1: GUARD CHECK
+        # ========================================
+        is_relevant = True
+        if self.guard:
+            is_relevant = self.guard.check(message)
+            logger.info(f"LLM Guard relevance: {is_relevant}")
+
+        if not is_relevant:
+            logger.info("Message irrelevant to domain. Using direct path.")
+            answer = await self.llm.generate_direct_response(message)
+            
+            # Create assistant message (no sources/images for irrelevant queries)
+            assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
+            assistant_message = ChatMessage(
+                message_id=assistant_message_id,
+                role="assistant",
+                content=answer,
+                image_paths=[],
+                sources={},
+                timestamp=datetime.utcnow()
+            )
+            await self.chat_repo.add_message(chat_id, assistant_message)
+            
+            return ChatResponse(
+                chat_id=chat_id,
+                username=username,
+                message_id=assistant_message_id,
+                answer=answer,
+                sources={},
+                inline_citations=[],
+                image_results=[]
+            )
+
+        # ========================================
+        # STEP 2: UNIFIED SEARCH
         # ========================================
         query_image_data = None
         if image_paths:
@@ -135,10 +172,8 @@ class ChatController:
             search_images=True
         )
         
-        logger.info(f"Unified search returned {len(search_results)} results")
-        
         # ========================================
-        # STEP 2: ENRICH - Get actual objects
+        # STEP 3: ENRICH - Get actual objects
         # ========================================
         enriched = await self.retrieval_service.enrich_search_results(
             search_results
@@ -273,6 +308,7 @@ class ChatController:
         
         return ChatResponse(
             chat_id=chat_id,
+            username=username,
             message_id=assistant_message_id,
             answer=answer,
             sources=sources,
@@ -283,6 +319,7 @@ class ChatController:
     async def send_message_stream(
         self,
         message: str,
+        username: str,
         chat_id: Optional[str] = None,
         category_ids: Optional[List[str]] = None,
         document_ids: Optional[List[str]] = None,
@@ -306,9 +343,9 @@ class ChatController:
         is_new_chat = chat_id is None
         if is_new_chat:
             chat_id = f"chat_{uuid.uuid4().hex[:12]}"
-            await self.chat_repo.create(chat_id, category_ids, document_ids)
+            await self.chat_repo.create(chat_id, username, category_ids, document_ids)
         else:
-            existing_chat = await self.chat_repo.get_by_id(chat_id)
+            existing_chat = await self.chat_repo.get_by_id(chat_id, username)
             if not existing_chat:
                 raise ChatNotFoundError(chat_id)
             if category_ids is None:
@@ -336,7 +373,7 @@ class ChatController:
         self.indexer.initialize()
         self.llm.initialize()
 
-        # STEP 1: UNIFIED SEARCH
+        # STEP 1: UNIFIED SEARCH (and Guard Check)
         query_image_data = None
         if image_paths:
             try:
@@ -346,6 +383,32 @@ class ChatController:
             except:
                 pass
 
+        is_relevant = True
+        if self.guard:
+            is_relevant = self.guard.check(message)
+            logger.info(f"LLM Guard relevance (stream): {is_relevant}")
+
+        if not is_relevant:
+            logger.info("Message irrelevant to domain (stream). Using direct path.")
+            full_answer = ""
+            async for token in self.llm.generate_direct_response_stream(message):
+                full_answer += token
+                yield f"data: {json_mod.dumps({'token': token})}\n\n"
+            
+            # Save assistant message
+            assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
+            assistant_message = ChatMessage(
+                message_id=assistant_message_id,
+                role="assistant",
+                content=full_answer,
+                image_paths=[],
+                sources={},
+                timestamp=datetime.utcnow()
+            )
+            await self.chat_repo.add_message(chat_id, assistant_message)
+            
+            yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'username': username, 'message_id': assistant_message_id, 'answer': full_answer, 'sources': {}, 'inline_citations': [], 'image_results': []})}\n\n"
+            return
 
         search_results = self.search_service.search(
             query_text=message,
@@ -456,7 +519,7 @@ class ChatController:
         ]
 
         # STEP 9: Send final event with metadata
-        yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'message_id': assistant_message_id, 'answer': answer, 'sources': sources, 'inline_citations': inline_citations, 'image_results': image_results})}\n\n"
+        yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'username': username, 'message_id': assistant_message_id, 'answer': answer, 'sources': sources, 'inline_citations': inline_citations, 'image_results': image_results})}\n\n"
     
     def _enrich_inline_citations(
         self,
@@ -623,20 +686,20 @@ class ChatController:
                 context_parts.append(f"  [Attached {len(msg.image_paths)} image(s)]")
         return "\n".join(context_parts)
     
-    async def get_chat(self, chat_id: str) -> ChatSession:
+    async def get_chat(self, chat_id: str, username: str) -> ChatSession:
         """Get a chat session by ID."""
-        chat = await self.chat_repo.get_by_id(chat_id)
+        chat = await self.chat_repo.get_by_id(chat_id, username)
         if not chat:
             raise ChatNotFoundError(chat_id)
         return chat
     
-    async def list_chats(self, limit: int = 50) -> List[ChatSession]:
-        """List all chat sessions."""
-        return await self.chat_repo.get_all(limit=limit)
+    async def list_chats(self, username: str, limit: int = 50) -> List[ChatSession]:
+        """List all chat sessions for a user."""
+        return await self.chat_repo.get_all_by_user(username, limit=limit)
     
-    async def delete_chat(self, chat_id: str) -> bool:
+    async def delete_chat(self, chat_id: str, username: str) -> bool:
         """Delete a chat session and its images."""
-        chat = await self.chat_repo.get_by_id(chat_id)
+        chat = await self.chat_repo.get_by_id(chat_id, username)
         if not chat:
             raise ChatNotFoundError(chat_id)
         
@@ -646,7 +709,7 @@ class ChatController:
             shutil.rmtree(chat_dir)
             logger.info(f"Deleted chat images: {chat_dir}")
         
-        return await self.chat_repo.delete(chat_id)
+        return await self.chat_repo.delete(chat_id, username)
     
     async def save_uploaded_images(
         self,

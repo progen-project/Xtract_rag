@@ -379,6 +379,7 @@ batches = {
 # ══════════════════════════════════════════════════════════════════
 chat_resp = json.dumps({
     "chat_id": "c1h2a3t4-abcd-efgh-ijkl-567890",
+    "username": "petro_user_01",
     "message_id": "msg_a1b2c3d4",
     "answer": "Based on the drilling report [Source 1, Page 12], the well reached a total depth of 15,000 ft. The formation analysis [Source 2, Page 8] indicates high porosity in the target zone.",
     "sources": {
@@ -396,6 +397,7 @@ chat_resp = json.dumps({
 
 chat_form = [
     {"key": "message", "value": "What is the total depth of the well?", "type": "text", "description": "Required. User's question."},
+    {"key": "username", "value": "petro_user_01", "type": "text", "description": "Required. The user's identifier."},
     {"key": "chat_id", "value": "", "type": "text", "description": "Optional. Existing chat session ID.", "disabled": True},
     {"key": "category_ids", "value": '[\"{{category_id}}\"]', "type": "text", "description": "Optional. JSON array of category IDs."},
     {"key": "document_ids", "value": '[\"{{document_id}}\"]', "type": "text", "description": "Optional. JSON array of document IDs."},
@@ -404,6 +406,7 @@ chat_form = [
 
 chat_session = json.dumps({
     "chat_id": "c1h2a3t4-abcd-efgh-ijkl-567890",
+    "username": "petro_user_01",
     "category_ids": ["a1b2c3d4e5f6"],
     "messages": [
         {"message_id": "msg_u001", "role": "user", "content": "What is the total depth?", "image_paths": [], "sources": None, "timestamp": "2024-06-15T10:00:00"},
@@ -430,7 +433,7 @@ chat_section = {
                 "method": "POST",
                 "body": {"mode": "formdata", "formdata": chat_form},
                 "url": {"raw": "{{base_url}}/chat", "host": ["{{base_url}}"], "path": ["chat"]},
-                "description": "Send a message (multipart/form-data for image support).\n\n**Form Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `message` | string | ✅ | User's question |\n| `chat_id` | string | ❌ | Continue existing chat |\n| `category_ids` | JSON string | ❌ | `'[\"id1\",\"id2\"]'` |\n| `images` | file[] | ❌ | Image attachments |\n\n**Response:** `ChatResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID (save this!) |\n| `message_id` | string | Message ID |\n| `answer` | string | AI response with inline citations |\n| `sources` | dict | `{doc_id: {filename, pages[]}}` |\n| `inline_citations` | InlineCitation[] | `[{source_number, document_id, filename, section_title, pages[]}]` |\n| `image_results` | ImageSearchResult[] | Retrieved images |"
+                "description": "Send a message (multipart/form-data for image support).\n\n**Form Fields:**\n| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n| `message` | string | ✅ | User's question |\n| `username` | string | ✅ | The user's identifier |\n| `chat_id` | string | ❌ | Continue existing chat |\n| `category_ids` | JSON string | ❌ | `'[\"id1\",\"id2\"]'` |\n| `images` | file[] | ❌ | Image attachments |\n\n**Response:** `ChatResponse`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID (save this!) |\n| `username` | string | Echo of username |\n| `message_id` | string | Message ID |\n| `answer` | string | AI response with inline citations |\n| `sources` | dict | `{doc_id: {filename, pages[]}}` |\n| `inline_citations` | InlineCitation[] | `[{source_number, document_id, filename, section_title, pages[]}]` |\n| `image_results` | ImageSearchResult[] | Retrieved images |"
             },
             "response": [
                 ex("200 — Success", "POST", "{{base_url}}/chat", "{{base_url}}", ["chat"],
@@ -446,6 +449,7 @@ chat_section = {
                 "method": "POST",
                 "body": {"mode": "formdata", "formdata": [
                     {"key": "message", "value": "Summarize the uploaded documents", "type": "text"},
+                    {"key": "username", "value": "petro_user_01", "type": "text"},
                     {"key": "category_ids", "value": '[\"{{category_id}}\"]', "type": "text"},
                     {"key": "document_ids", "value": '[\"{{document_id}}\"]', "type": "text"}
                 ]},
@@ -467,39 +471,47 @@ chat_section = {
             ], "type": "text/javascript"}}],
             "request": {
                 "method": "GET",
-                "url": {"raw": "{{base_url}}/chat?limit=50", "host": ["{{base_url}}"], "path": ["chat"],
-                        "query": [{"key": "limit", "value": "50", "description": "Max sessions (default 50)"}]},
-                "description": "List all chat sessions.\n\n**Response:** `ChatSession[]`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID |\n| `category_ids` | string[]? | Linked categories |\n| `messages` | ChatMessage[] | All messages |\n| `created_at` | datetime | Created |\n| `updated_at` | datetime | Last activity |"
+                "url": {"raw": "{{base_url}}/chat?username=petro_user_01&limit=50", "host": ["{{base_url}}"], "path": ["chat"],
+                        "query": [
+                            {"key": "username", "value": "petro_user_01", "description": "Required. The user's sessions to list."},
+                            {"key": "limit", "value": "50", "description": "Max sessions (default 50)"}
+                        ]},
+                "description": "List all chat sessions for a user.\n\n**Response:** `ChatSession[]`\n\n| Field | Type | Description |\n|-------|------|-------------|\n| `chat_id` | string | Session ID |\n| `username` | string | Echo of username |\n| `category_ids` | string[]? | Linked categories |\n| `messages` | ChatMessage[] | All messages |\n| `created_at` | datetime | Created |\n| `updated_at` | datetime | Last activity |"
             },
             "response": [
-                ex("200 — Success", "GET", "{{base_url}}/chat?limit=50", "{{base_url}}", ["chat"], body=chat_sessions_list)
+                ex("200 — Success", "GET", "{{base_url}}/chat?username=petro_user_01&limit=50", "{{base_url}}", ["chat"], 
+                   url_query=[{"key": "username", "value": "petro_user_01"}, {"key": "limit", "value": "50"}],
+                   body=chat_sessions_list)
             ]
         },
         {
             "name": "Get Chat Session",
             "request": {
                 "method": "GET",
-                "url": {"raw": "{{base_url}}/chat/{{chat_id}}", "host": ["{{base_url}}"], "path": ["chat", "{{chat_id}}"]},
+                "url": {"raw": "{{base_url}}/chat/{{chat_id}}?username=petro_user_01", "host": ["{{base_url}}"], "path": ["chat", "{{chat_id}}"],
+                        "query": [{"key": "username", "value": "petro_user_01", "description": "Required. Verification of ownership."}]},
                 "description": "Get full chat session with all messages.\n\n**Response:** `ChatSession`"
             },
             "response": [
-                ex("200 — Success", "GET", "{{base_url}}/chat/{{chat_id}}", "{{base_url}}", ["chat", "{{chat_id}}"], body=chat_session),
-                ex("404 — Not Found", "GET", "{{base_url}}/chat/bad_id", "{{base_url}}", ["chat", "bad_id"],
-                   status="Not Found", code=404, body=N404("Chat"))
+                ex("200 — Success", "GET", "{{base_url}}/chat/{{chat_id}}?username=petro_user_01", "{{base_url}}", ["chat", "{{chat_id}}"], 
+                   url_query=[{"key": "username", "value": "petro_user_01"}], body=chat_session),
+                ex("404 — Not Found", "GET", "{{base_url}}/chat/bad_id?username=petro_user_01", "{{base_url}}", ["chat", "bad_id"],
+                   url_query=[{"key": "username", "value": "petro_user_01"}], status="Not Found", code=404, body=N404("Chat"))
             ]
         },
         {
             "name": "Delete Chat Session",
             "request": {
                 "method": "DELETE",
-                "url": {"raw": "{{base_url}}/chat/{{chat_id}}", "host": ["{{base_url}}"], "path": ["chat", "{{chat_id}}"]},
+                "url": {"raw": "{{base_url}}/chat/{{chat_id}}?username=petro_user_01", "host": ["{{base_url}}"], "path": ["chat", "{{chat_id}}"],
+                        "query": [{"key": "username", "value": "petro_user_01", "description": "Required. Verification of ownership."}]},
                 "description": "Delete a chat session and all messages.\n\n**Response:** `{message}`"
             },
             "response": [
-                ex("200 — Deleted", "DELETE", "{{base_url}}/chat/{{chat_id}}", "{{base_url}}", ["chat", "{{chat_id}}"],
-                   body=json.dumps({"message": "Chat c1h2a3t4-abcd-efgh-ijkl-567890 deleted"}, indent=4)),
-                ex("404 — Not Found", "DELETE", "{{base_url}}/chat/bad_id", "{{base_url}}", ["chat", "bad_id"],
-                   status="Not Found", code=404, body=N404("Chat"))
+                ex("200 — Deleted", "DELETE", "{{base_url}}/chat/{{chat_id}}?username=petro_user_01", "{{base_url}}", ["chat", "{{chat_id}}"],
+                   url_query=[{"key": "username", "value": "petro_user_01"}], body=json.dumps({"message": "Chat c1h2a3t4-abcd-efgh-ijkl-567890 deleted"}, indent=4)),
+                ex("404 — Not Found", "DELETE", "{{base_url}}/chat/bad_id?username=petro_user_01", "{{base_url}}", ["chat", "bad_id"],
+                   url_query=[{"key": "username", "value": "petro_user_01"}], status="Not Found", code=404, body=N404("Chat"))
             ]
         }
     ]
@@ -647,11 +659,13 @@ client_proxy = {
                    [chat_section["item"][0]["response"][0]], body_obj=chat_form, body_mode="formdata"),
         proxy_item("List Chat Sessions", "GET", ["chat"], "List sessions.",
                    chat_section["item"][2]["response"],
-                   query=[{"key": "limit", "value": "50"}]),
+                   query=[{"key": "username", "value": "petro_user_01"}, {"key": "limit", "value": "50"}]),
         proxy_item("Get Chat Session", "GET", ["chat", "{{chat_id}}"], "Get session.",
-                   chat_section["item"][3]["response"]),
+                   chat_section["item"][3]["response"],
+                   query=[{"key": "username", "value": "petro_user_01"}]),
         proxy_item("Delete Chat Session", "DELETE", ["chat", "{{chat_id}}"], "Delete session.",
-                   chat_section["item"][4]["response"]),
+                   chat_section["item"][4]["response"],
+                   query=[{"key": "username", "value": "petro_user_01"}]),
         # Query
         proxy_item("RAG Query", "POST", ["query"], "RAG query.",
                    [query_section["item"][0]["response"][0]], header=json_header(),

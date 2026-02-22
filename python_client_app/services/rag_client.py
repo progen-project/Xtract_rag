@@ -162,27 +162,28 @@ class RAGClientService:
                         yield json.loads(line[6:])
 
     # --- Chat ---
-    async def list_chats(self, limit: int = 50) -> List[ChatSession]:
+    async def list_chats(self, username: str, limit: int = 50) -> List[ChatSession]:
         async with await self._get_client() as client:
-            resp = await client.get("/chat", params={"limit": limit})
+            resp = await client.get("/chat", params={"username": username, "limit": limit})
             resp.raise_for_status()
             return [ChatSession(**item) for item in resp.json()]
             
-    async def get_chat(self, chat_id: str) -> ChatSession:
+    async def get_chat(self, chat_id: str, username: str) -> ChatSession:
         async with await self._get_client() as client:
-            resp = await client.get(f"/chat/{chat_id}")
+            resp = await client.get(f"/chat/{chat_id}", params={"username": username})
             resp.raise_for_status()
             return ChatSession(**resp.json())
 
-    async def delete_chat(self, chat_id: str) -> Dict[str, str]:
+    async def delete_chat(self, chat_id: str, username: str) -> Dict[str, str]:
         async with await self._get_client() as client:
-            resp = await client.delete(f"/chat/{chat_id}")
+            resp = await client.delete(f"/chat/{chat_id}", params={"username": username})
             resp.raise_for_status()
             return resp.json()
 
     async def send_message(self, request: ChatRequest, images: List[tuple] = None) -> ChatResponse:
         data = {
             "message": request.message,
+            "username": request.username,
         }
         if request.chat_id:
             data["chat_id"] = request.chat_id

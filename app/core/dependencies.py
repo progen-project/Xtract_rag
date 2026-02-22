@@ -24,6 +24,7 @@ from app.services.pdf_parser import DoclingParser
 from app.services.chunker import SectionChunker
 from app.services.image_embedder import image_embedder
 from app.services.rerank_service import rerank_service
+from app.services.llm_guard import Guard
 
 
 from app.services.status import ProcessingStatusManager  # Added
@@ -59,6 +60,7 @@ class Container:
         self.image_embedder = image_embedder
         self.rerank_service = rerank_service
         self.status_manager = ProcessingStatusManager()  # Added status manager
+        self.guard: Optional[Guard] = None
     
     async def initialize(self) -> None:
         """Initialize all components (called at startup)."""
@@ -86,6 +88,9 @@ class Container:
         self.llm.initialize()
         self.rerank_service.initialize()
         
+        # Initialize Guard
+        self.guard = Guard(threshold=self.settings.guard_threshold)
+        
         # Initialize controllers
         self.category_controller = CategoryController(self.category_repo)
         
@@ -105,7 +110,8 @@ class Container:
         self.query_controller = QueryController(
             indexer=self.indexer,
             llm_service=self.llm,
-            document_repo=self.document_repo
+            document_repo=self.document_repo,
+            guard=self.guard
         )
         
         # FIXED: ChatController now gets document_repo to fetch images by ID
@@ -114,7 +120,8 @@ class Container:
             indexer=self.indexer,
             llm_service=self.llm,
             settings=self.settings,
-            document_repo=self.document_repo  # ADDED
+            document_repo=self.document_repo,  # ADDED
+            guard=self.guard
         )
         
         logger.info("Dependency container initialized")

@@ -30,6 +30,7 @@ class ChatMessage(BaseModel):
 class ChatSession(BaseModel):
     """A chat session with message history."""
     chat_id: str
+    username: str
     category_ids: Optional[List[str]] = None
     document_ids: Optional[List[str]] = None
     messages: List[ChatMessage] = Field(default_factory=list)
@@ -42,6 +43,7 @@ from app.config.settings import get_settings
 class ChatRequest(BaseModel):
     """Request for chat endpoint (used with form-data)."""
     chat_id: Optional[str] = None
+    username: str
     message: str
     category_ids: Optional[List[str]] = None
     document_ids: Optional[List[str]] = None
@@ -51,6 +53,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     """Response from chat endpoint."""
     chat_id: str
+    username: str
     message_id: str
     answer: str
     sources: dict = Field(default_factory=dict, description="Sources map: document_id -> {filename, pages, ...}")

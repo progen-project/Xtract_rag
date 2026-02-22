@@ -27,6 +27,7 @@ class ChatRepository:
     async def create(
         self,
         chat_id: str,
+        username: str,
         category_ids: Optional[List[str]] = None,
         document_ids: Optional[List[str]] = None
     ) -> ChatSession:
@@ -34,6 +35,7 @@ class ChatRepository:
         now = datetime.utcnow()
         chat = ChatSession(
             chat_id=chat_id,
+            username=username,
             category_ids=category_ids,
             document_ids=document_ids,
             messages=[],
@@ -49,9 +51,13 @@ class ChatRepository:
         logger.info(f"Created chat session: {chat_id}")
         return chat
     
-    async def get_by_id(self, chat_id: str) -> Optional[ChatSession]:
-        """Get a chat session by ID."""
-        doc = await self.collection.find_one({"_id": chat_id})
+    async def get_by_id(self, chat_id: str, username: Optional[str] = None) -> Optional[ChatSession]:
+        """Get a chat session by ID, optionally filtered by username."""
+        query = {"_id": chat_id}
+        if username:
+            query["username"] = username
+            
+        doc = await self.collection.find_one(query)
         if doc:
             doc["chat_id"] = doc.pop("_id")
             return ChatSession(**doc)
@@ -79,19 +85,19 @@ class ChatRepository:
             return []
         return chat.messages[-limit:]
     
-    async def get_all(self, limit: int = 50) -> List[ChatSession]:
-        """List all chat sessions (most recent first)."""
-        cursor = self.collection.find().sort("updated_at", -1).limit(limit)
+    async def get_all_by_user(self, username: str, limit: int = 50) -> List[ChatSession]:
+        """List all chat sessions for a specific user (most recent first)."""
+        cursor = self.collection.find({"username": username}).sort("updated_at", -1).limit(limit)
         chats = []
         async for doc in cursor:
             doc["chat_id"] = doc.pop("_id")
             chats.append(ChatSession(**doc))
         return chats
     
-    async def delete(self, chat_id: str) -> bool:
+    async def delete(self, chat_id: str, username: str) -> bool:
         """Delete a chat session."""
-        result = await self.collection.delete_one({"_id": chat_id})
+        result = await self.collection.delete_one({"_id": chat_id, "username": username})
         if result.deleted_count > 0:
-            logger.info(f"Deleted chat: {chat_id}")
+            logger.info(f"Deleted chat: {chat_id} for user: {username}")
             return True
         return False

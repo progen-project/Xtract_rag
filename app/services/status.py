@@ -75,9 +75,18 @@ class ProcessingStatusManager:
         queue = self._events[batch_id]
         try:
             while True:
-                # Wait for event
-                event = await queue.get()
-                yield f"data: {json.dumps(event)}\n\n"
+                try:
+                    # Wait for event with timeout for heartbeat
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    # Send heartbeat to keep connection alive
+                    heartbeat = {
+                        "type": "heartbeat",
+                        "batch_id": batch_id,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    yield f"data: {json.dumps(heartbeat)}\n\n"
                 
                 # specific check to end stream if all files are completed or failed if needed
                 # For now, we keep it open until client disconnects or we implement strict closure
