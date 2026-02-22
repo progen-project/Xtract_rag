@@ -1,148 +1,109 @@
-# PetroRAG - Multimodal RAG Pipeline
+# PetroRAG - Main Backend Application API
 
 A comprehensive RAG (Retrieval-Augmented Generation) system for processing PDF documents with tables and figures, using LlamaIndex for indexing, Qdrant for vector search, MongoDB for metadata storage, and GROQ API with Qwen models.
 
 ## Features
+- **PDF Processing**: Extract text, tables, and images from PDFs.
+- **Section-based Chunking**: Intelligent chunking based on document TOC with 20% overlap.
+- **Table Extraction**: Structured table extraction using pdfplumber.
+- **Image Extraction**: Figure and image extraction with caption detection.
+- **Multimodal RAG**: Query both text and image content.
+- **Categories & Batches**: Robust file and category management and batch uploading capabilities.
+- **Streaming Chat**: Server-Sent Events (SSE) based real-time chat with LLM.
 
-- **PDF Processing**: Extract text, tables, and images from PDFs
-- **Section-based Chunking**: Intelligent chunking based on document TOC with 20% overlap
-- **Table Extraction**: Structured table extraction using pdfplumber
-- **Image Extraction**: Figure and image extraction with caption detection
-- **LlamaIndex + Qdrant**: High-performance semantic search with Qdrant vector database
-- **Multimodal RAG**: Query both text and image content
-- **GROQ/Qwen Integration**: Fast LLM inference with Qwen models
+---
 
-## Project Structure
+## 🚀 API Endpoints Signature Guide
 
-```
-new_rag/
-├── app/
-│   ├── __init__.py
-│   ├── main.py                 # FastAPI application
-│   ├── config.py               # Configuration settings
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── schemas.py          # Pydantic models
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── pdf_parser.py       # PDF parsing logic
-│   │   ├── chunker.py          # Section chunking
-│   │   ├── image_extractor.py  # Image extraction
-│   │   ├── indexer.py          # LlamaIndex integration
-│   │   └── llm_service.py      # GROQ/Qwen integration
-│   ├── database/
-│   │   ├── __init__.py
-│   │   └── mongodb.py          # MongoDB operations
-│   └── routers/
-│       ├── __init__.py
-│       ├── documents.py        # Document endpoints
-│       └── query.py            # Query endpoints
-├── uploads/                    # PDF storage
-├── extracted_images/           # Extracted images
-├── requirements.txt
-├── .env.example
-└── README.md
-```
+The main application exposes the following RESTful API endpoints under `/api`. This guide serves as a reference for integrating external services with PetroRAG.
 
-## Setup
+### 1. Categories (`/api/categories`)
+Manage document categories. Categories help separate and organize embeddings and context for precise querying.
 
-### 1. Install Dependencies
+| Method | Endpoint | Description | Content-Type | Payload/Query |
+|--------|----------|-------------|--------------|---------------|
+| `POST` | `/api/categories` | Create a new category | `application/json` | Body: `{"name": "string", "description": "string"}` |
+| `GET` | `/api/categories` | List all categories | - | - |
+| `GET` | `/api/categories/{category_id}` | Get specific category metadata | - | - |
+| `PUT` | `/api/categories/{category_id}` | Update category | `application/json` | Body: `{"name": "string", "description": "string"}` |
+| `DELETE`| `/api/categories/{category_id}` | Delete a category | - | - |
+| `GET` | `/api/categories/{category_id}/documents` | List documents in category | - | - |
 
+### 2. Documents (`/api/documents`)
+Handle PDF uploads, daily (temporary) documents, deletions, and downloads.
+
+| Method | Endpoint | Description | Content-Type | Payload/Query |
+|--------|----------|-------------|--------------|---------------|
+| `POST` | `/api/documents/upload/{category_id}` | Upload multiple PDFs | `multipart/form-data` | Form: `files` (Array of files). Max 50 files. Returns `batch_id`. |
+| `POST` | `/api/documents/upload/daily/{category_id}` | Upload temp PDFs (24h expiry) | `multipart/form-data` | Form: `files` (Array of files). Max 50 files. Returns `batch_id`. |
+| `DELETE`| `/api/documents/cleanup/daily` | Delete all >24h old documents | - | - |
+| `GET` | `/api/documents` | List all documents | - | Query: `?category_id=optional_id` |
+| `GET` | `/api/documents/{document_id}` | Get document metadata | - | - |
+| `DELETE`| `/api/documents/{document_id}` | Delete a document gently | - | - |
+| `DELETE`| `/api/documents/{document_id}/burn` | Hard-delete doc & all artifacts | - | - |
+| `GET` | `/api/documents/{document_id}/download`| Download PDF | - | Returns `application/pdf` |
+
+### 3. Batches (`/api/batches`)
+Track multi-file upload processing in real-time.
+
+| Method | Endpoint | Description | Content-Type | Payload/Query |
+|--------|----------|-------------|--------------|---------------|
+| `GET` | `/api/batches/{batch_id}` | One-time status of batch | - | Returns JSON dict of files status |
+| `GET` | `/api/batches/{batch_id}/progress` | Real-time batch progress stream| - | Returns `text/event-stream` (SSE) |
+| `POST` | `/api/batches/{batch_id}/terminate` | Terminate in-progress batch | - | Halts remaining processing |
+
+### 4. Chat (`/api/chat`)
+Stateful conversational endpoints supporting Multimodal RAG context, history, and real-time streaming.
+
+| Method | Endpoint | Description | Content-Type | Payload/Query |
+|--------|----------|-------------|--------------|---------------|
+| `POST` | `/api/chat` | Send a chat message | `multipart/form-data` | Form: `message` (str, req), `username` (str, req), `chat_id` (str, opt), `category_ids` (JSON str, opt), `document_ids` (JSON str, opt), `top_k` (int, opt), `images` (List of files, opt). |
+| `POST` | `/api/chat/stream` | Stream chat message (SSE) | `multipart/form-data` | Form: Same as `/api/chat`. Returns `text/event-stream`. |
+| `GET` | `/api/chat` | List chat sessions | - | Query: `?username=req&limit=50` |
+| `GET` | `/api/chat/{chat_id}` | Get specific chat session | - | Query: `?username=req` |
+| `DELETE`| `/api/chat/{chat_id}` | Delete a chat session | - | Query: `?username=req` |
+
+### 5. Query (`/api/query`)
+Stateless raw query operations (RAG without persistent chat state) and pure image-search.
+
+| Method | Endpoint | Description | Content-Type | Payload/Query |
+|--------|----------|-------------|--------------|---------------|
+| `POST` | `/api/query` | RAG query | `application/json` | Body: `QueryRequest` (query, top_k, categories, etc) |
+| `POST` | `/api/query/image-search` | Multimodal Image Search | `application/json` | Body: `ImageSearchRequest` (text or image query) |
+
+---
+
+## 🛠 Usage Example
+
+### Uploading a batch of documents and tracking progress:
 ```bash
-cd new_rag
-pip install -r requirements.txt
-```
-
-### 2. Configure Environment
-
-Copy `.env.example` to `.env` and configure:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-```env
-MONGODB_URI=mongodb://localhost:27017
-MONGODB_DATABASE=petro_rag
-GROQ_API_KEY=your_groq_api_key_here
-```
-
-### 3. Start MongoDB
-
-Ensure MongoDB is running locally or configure MongoDB Atlas URI.
-
-### 4. Run the Application
-
-```bash
-uvicorn app.main:app --reload
-```
-
-The API will be available at `http://localhost:8080`
-
-## API Endpoints
-
-### Documents
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/documents/upload` | Upload PDF for processing |
-| GET | `/api/documents/` | List all documents |
-| GET | `/api/documents/{id}` | Get document metadata |
-| GET | `/api/documents/{id}/chunks` | Get document chunks |
-| GET | `/api/documents/{id}/images` | Get document images |
-| GET | `/api/documents/{id}/tables` | Get document tables |
-| DELETE | `/api/documents/{id}` | Delete document |
-
-### Query
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/query/` | RAG query |
-| POST | `/api/query/multimodal` | Multimodal query |
-| POST | `/api/query/similar` | Find similar chunks |
-| GET | `/api/query/embedding` | Get text embedding |
-
-## Usage Example
-
-### Upload a Document
-
-```bash
-curl -X POST "http://localhost:8080/api/documents/upload" \
+# 1. Upload files
+curl -X POST "http://localhost:8080/api/documents/upload/<category_id>" \
   -H "Content-Type: multipart/form-data" \
-  -F "file=@document.pdf"
+  -F "files=@document1.pdf" -F "files=@document2.pdf"
+# Returns: [{"document_id": "...", "batch_id": "abc-123", ...}]
+
+# 2. Track Progress (Server-Sent Events)
+curl -N "http://localhost:8080/api/batches/abc-123/progress"
 ```
 
-### Query the System
-
+### Multimodal Streaming Chat:
 ```bash
-curl -X POST "http://localhost:8080/api/query/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "What are the main findings?",
-    "top_k": 5,
-    "include_images": true,
-    "include_tables": true
-  }'
+curl -N -X POST "http://localhost:8080/api/chat/stream" \
+  -F "username=johndoe" \
+  -F "message=Explain the process in this diagram" \
+  -F "category_ids=[\"cat_id_a\"]" \
+  -F "images=@diagram.png"
 ```
 
-## Architecture
+---
 
-```
-PDF Upload → Parser → Chunks → Index → Qdrant (vectors)
-                ↓        ↓           ↘
-           Images    Tables      MongoDB (metadata)
-                ↓        ↓
-Query → Retrieval → LLM → Response
-```
+## Architecture & Storage
+- **LlamaIndex + Qdrant**: High-performance semantic search with Vector embeddings.
+- **MongoDB**: Central metadata for documents, chunks, chat histories, tables, and images.
+- **Local File System**: Upload directory (`uploads/`) and extracted artifacts (`extracted_images/`).
 
-## Storage
-
-| Storage | Purpose |
-|---------|---------|
-| **Qdrant** | Vector embeddings for semantic search |
-| **MongoDB** | Document metadata, chunks, images, tables |
-
-## License
-
-MIT
+## Setup and Running
+1. `pip install -r requirements.txt`
+2. `cp .env.example .env` (Configure MONGODB_URI, GROQ_API_KEY)
+3. `uvicorn app.main:app --host 0.0.0.0 --port 8080`

@@ -222,29 +222,30 @@ class Api {
     }
 
     // --- Chat ---
-    static async listChats() {
-        const res = await fetch(`${API_BASE}/chat`);
-        if (!res.ok) throw new Error('Failed to load chats');
-        return res.json();
+    static async listChats(username) {
+      const res = await fetch(`${API_BASE}/chat?username=${encodeURIComponent(username)}`);
+      if (!res.ok) throw new Error('Failed to load chats');
+      return res.json();
     }
 
-    static async getChat(chatId) {
-        const res = await fetch(`${API_BASE}/chat/${chatId}`);
+    static async getChat(chatId, username) {
+        const res = await fetch(`${API_BASE}/chat/${chatId}?username=${encodeURIComponent(username)}`);
         if (!res.ok) throw new Error('Failed to load chat');
         return res.json();
     }
 
-    static async deleteChat(chatId) {
-        const res = await fetch(`${API_BASE}/chat/${chatId}`, {
+    static async deleteChat(chatId, username) {
+        const res = await fetch(`${API_BASE}/chat/${chatId}?username=${encodeURIComponent(username)}`, {
             method: 'DELETE'
         });
         if (!res.ok) throw new Error('Failed to delete chat');
         return res.json();
     }
 
-    static async sendMessage(message, chatId, categoryIds = [], documentIds = [], images = []) {
+    static async sendMessage(message, username, chatId, categoryIds = [], documentIds = [], images = []) {
         const formData = new FormData();
         formData.append('message', message);
+        formData.append('username', username);
         if (chatId) formData.append('chat_id', chatId);
         if (categoryIds && categoryIds.length > 0) {
             formData.append('category_ids', JSON.stringify(categoryIds));
@@ -277,9 +278,10 @@ class Api {
      * @param {function} onDone   - called with final metadata object
      * @param {function} onError  - called on error
      */
-    static async sendMessageStream(message, chatId, categoryIds = [], documentIds = [], images = [], onToken, onDone, onError) {
+    static async sendMessageStream(message, username, chatId, categoryIds = [], documentIds = [], images = [], onToken, onDone, onError) {
         const formData = new FormData();
         formData.append('message', message);
+        formData.append('username', username);
         if (chatId) formData.append('chat_id', chatId);
         if (categoryIds && categoryIds.length > 0) {
             formData.append('category_ids', JSON.stringify(categoryIds));

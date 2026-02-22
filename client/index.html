@@ -23,6 +23,14 @@
       <div class="logo">
         <i class="fa-solid fa-layer-group"></i> PetroRAG
       </div>
+      <!-- User Profile -->
+      <div class="user-profile" id="user-profile" onclick="openProfileModal()" title="Edit Profile">
+        <div class="user-info">
+          <div class="avatar"><i class="fa-solid fa-user-astronaut"></i></div>
+          <span id="display-username">petro_user_01</span>
+          <i class="fa-solid fa-gear settings-icon"></i>
+        </div>
+      </div>
     </div>
 
     <div class="sidebar-body">
@@ -266,6 +274,52 @@
 
       <button class="btn btn-primary" style="width: 100%" onclick="confirmStartChat()">
         <i class="fa-solid fa-comments"></i> Start Conversation
+      </button>
+    </div>
+  </div>
+
+  <!-- Welcome / Login Modal -->
+  <div id="welcome-modal" class="modal">
+    <div class="modal-content" style="text-align: center; max-width: 400px; animation: modalFadeIn 0.5s ease-out;">
+      <div style="font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem;">
+        <i class="fa-solid fa-layer-group"></i>
+      </div>
+      <h2 style="margin-bottom: 0.5rem; font-weight: 800;">Welcome to PetroRAG</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.9rem;">
+        Please enter a username to continue. This will be used to identify your chat sessions and preferences.
+      </p>
+      <div class="form-group" style="text-align: left;">
+        <input type="text" class="form-control" id="welcome-username-input" placeholder="e.g. John Doe"
+          style="font-size: 1.1rem; padding: 0.75rem;">
+      </div>
+      <button class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 1rem; padding: 0.75rem;"
+        onclick="saveWelcomeUsername()">
+        Get Started <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Edit Profile Modal -->
+  <div id="edit-profile-modal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3>Edit Profile</h3>
+        <button class="btn btn-secondary btn-icon" onclick="closeModal('edit-profile-modal')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div style="display: flex; justify-content: center; margin-bottom: 1.5rem;">
+        <div
+          style="width: 80px; height: 80px; background: var(--gradient-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: white;">
+          <i class="fa-solid fa-user-astronaut"></i>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" class="form-control" id="profile-username-input" placeholder="Enter new username">
+      </div>
+      <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="saveProfileUsername()">
+        <i class="fa-solid fa-check"></i> Save Changes
       </button>
     </div>
   </div>
