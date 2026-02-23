@@ -1,11 +1,17 @@
 """
 Client API router.
-Caching is now handled entirely by Nginx proxy_cache (nginx.conf).
-All Redis cache get/set/invalidate calls have been removed.
+Caching is handled by Nginx proxy_cache.
+
+Cache Purge Strategy:
+  - After any mutation (POST/PUT/DELETE), the response includes:
+      X-Cache-Invalidate: <scope>   e.g. "categories", "documents", "chat"
+  - The frontend reads this header and on the next GET for that scope
+    sends:  X-No-Cache: 1
+  - Nginx sees X-No-Cache: 1 and bypasses the cache → fresh data immediately.
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Body, Form
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi.responses import StreamingResponse, JSONResponse
 from typing import List, Optional
 import json
 
@@ -13,7 +19,7 @@ from python_client_app.services.rag_client import RAGClientService
 from python_client_app.schemas.batch import BatchStatusResponse, TerminateBatchResponse
 from python_client_app.schemas.category import CategoryResponse, CategoryCreate, CategoryUpdate
 from python_client_app.schemas.chat import ChatRequest, ChatResponse, ChatSession
-from python_client_app.schemas.document import DocumentResponse, UploadResponse, DocumentStatus
+from python_client_app.schemas.document import DocumentResponse, UploadResponse
 from python_client_app.schemas.query import (
     QueryRequest, QueryResponse,
     ImageSearchRequest, ImageSearchResponse,
@@ -21,6 +27,19 @@ from python_client_app.schemas.query import (
 
 router = APIRouter()
 rag_service = RAGClientService()
+
+
+def _with_invalidate(data, scope: str):
+    """
+    Wrap a response with X-Cache-Invalidate header so the frontend
+    knows which cache scope to purge on its next GET.
+
+    scope examples: "categories", "documents", "chat"
+    """
+    return JSONResponse(
+        content=data,
+        headers={"X-Cache-Invalidate": scope},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -32,19 +51,23 @@ async def list_categories():
     return await rag_service.list_categories()
 
 
-@router.post("/categories", response_model=CategoryResponse, tags=["Categories"])
+@router.post("/categories", tags=["Categories"])
 async def create_category(request: CategoryCreate):
-    return await rag_service.create_category(request)
+    result = await rag_service.create_category(request)
+    # إنشاء category يغير الـ categories list → أبلغ الـ frontend
+    return _with_invalidate(result if isinstance(result, dict) else result.dict(), "categories")
 
 
-@router.put("/categories/{category_id}", response_model=CategoryResponse, tags=["Categories"])
+@router.put("/categories/{category_id}", tags=["Categories"])
 async def update_category(category_id: str, request: CategoryUpdate):
-    return await rag_service.update_category(category_id, request)
+    result = await rag_service.update_category(category_id, request)
+    return _with_invalidate(result if isinstance(result, dict) else result.dict(), "categories")
 
 
 @router.delete("/categories/{category_id}", tags=["Categories"])
 async def delete_category(category_id: str):
-    return await rag_service.delete_category(category_id)
+    result = await rag_service.delete_category(category_id)
+    return _with_invalidate(result if isinstance(result, dict) else result, "categories")
 
 
 @router.get("/categories/{category_id}/documents", response_model=List[DocumentResponse], tags=["Categories"])
@@ -66,7 +89,7 @@ async def get_document(document_id: str):
     return await rag_service.get_document(document_id)
 
 
-@router.post("/documents/upload/{category_id}", response_model=List[UploadResponse], tags=["Documents"])
+@router.post("/documents/upload/{category_id}", tags=["Documents"])
 async def upload_documents(
     category_id: str,
     files: List[UploadFile] = File(...),
@@ -77,23 +100,33 @@ async def upload_documents(
         content = await file.read()
         file_list.append(("files", (file.filename, content, file.content_type)))
 
-    return await rag_service.upload_documents(category_id, file_list, is_daily)
+    result = await rag_service.upload_documents(category_id, file_list, is_daily)
+    # رفع document يغير documents + categories
+    data = [r if isinstance(r, dict) else r.dict() for r in result]
+    return JSONResponse(content=data, headers={"X-Cache-Invalidate": "documents,categories"})
 
 
 @router.delete("/documents/{document_id}", tags=["Documents"])
 async def delete_document(document_id: str):
-    return await rag_service.delete_document(document_id)
+    result = await rag_service.delete_document(document_id)
+    return JSONResponse(
+        content=result if isinstance(result, dict) else result,
+        headers={"X-Cache-Invalidate": "documents,categories"},
+    )
 
 
 @router.delete("/documents/{document_id}/burn", tags=["Documents"])
 async def burn_document(document_id: str):
-    return await rag_service.burn_document(document_id)
+    result = await rag_service.burn_document(document_id)
+    return JSONResponse(
+        content=result if isinstance(result, dict) else result,
+        headers={"X-Cache-Invalidate": "documents,categories"},
+    )
 
 
 @router.get("/documents/{document_id}/download", tags=["Documents"])
 async def download_document(document_id: str):
     stream, filename, content_type = await rag_service.download_document(document_id)
-
     from urllib.parse import quote
     safe_filename = quote(filename)
     return StreamingResponse(
@@ -101,8 +134,7 @@ async def download_document(document_id: str):
         media_type=content_type,
         headers={
             "Content-Disposition": (
-                f'attachment; filename="{filename}"; '
-                f"filename*=UTF-8''{safe_filename}"
+                f'attachment; filename="{filename}"; filename*=UTF-8\'\'{safe_filename}'
             )
         },
     )
@@ -111,7 +143,6 @@ async def download_document(document_id: str):
 @router.get("/documents/{document_id}/view", tags=["Documents"])
 async def view_document(document_id: str):
     stream, filename, content_type = await rag_service.download_document(document_id)
-
     from urllib.parse import quote
     safe_filename = quote(filename)
     return StreamingResponse(
@@ -119,8 +150,7 @@ async def view_document(document_id: str):
         media_type=content_type,
         headers={
             "Content-Disposition": (
-                f'inline; filename="{filename}"; '
-                f"filename*=UTF-8''{safe_filename}"
+                f'inline; filename="{filename}"; filename*=UTF-8\'\'{safe_filename}'
             )
         },
     )
@@ -128,7 +158,11 @@ async def view_document(document_id: str):
 
 @router.delete("/documents/cleanup/daily", tags=["Documents"])
 async def cleanup_daily():
-    return await rag_service.cleanup_daily()
+    result = await rag_service.cleanup_daily()
+    return JSONResponse(
+        content=result if isinstance(result, dict) else result,
+        headers={"X-Cache-Invalidate": "documents,categories"},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -143,19 +177,20 @@ async def get_batch_status(batch_id: str):
     return status
 
 
-@router.post("/batches/{batch_id}/terminate", response_model=TerminateBatchResponse, tags=["Batches"])
+@router.post("/batches/{batch_id}/terminate", tags=["Batches"])
 async def terminate_batch(batch_id: str):
-    return await rag_service.terminate_batch(batch_id)
+    result = await rag_service.terminate_batch(batch_id)
+    return JSONResponse(
+        content=result if isinstance(result, dict) else result.dict(),
+        headers={"X-Cache-Invalidate": "documents"},
+    )
 
 
 @router.get("/batches/{batch_id}/progress", tags=["Batches"])
 async def stream_batch_progress(batch_id: str):
-    """Proxy SSE stream from main API."""
-
     async def generator():
         async for data in rag_service.stream_batch_progress(batch_id):
             yield f"data: {json.dumps(data)}\n\n"
-
     return StreamingResponse(generator(), media_type="text/event-stream")
 
 
@@ -175,10 +210,14 @@ async def get_chat(chat_id: str, username: str):
 
 @router.delete("/chat/{chat_id}", tags=["Chat"])
 async def delete_chat(chat_id: str, username: str):
-    return await rag_service.delete_chat(chat_id, username)
+    result = await rag_service.delete_chat(chat_id, username)
+    return JSONResponse(
+        content=result if isinstance(result, dict) else result,
+        headers={"X-Cache-Invalidate": "chat"},
+    )
 
 
-@router.post("/chat", response_model=ChatResponse, tags=["Chat"])
+@router.post("/chat", tags=["Chat"])
 async def send_message(
     message: str = Form(...),
     username: str = Form(...),
@@ -186,7 +225,7 @@ async def send_message(
     category_ids: Optional[str] = Form(None),
     document_ids: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
-) -> ChatResponse:
+) -> JSONResponse:
     parsed_category_ids = None
     if category_ids:
         try:
@@ -219,7 +258,11 @@ async def send_message(
         if img.filename:
             image_files.append(("images", (img.filename, content, img.content_type)))
 
-    return await rag_service.send_message(request, image_files)
+    result = await rag_service.send_message(request, image_files)
+    return JSONResponse(
+        content=result if isinstance(result, dict) else result.dict(),
+        headers={"X-Cache-Invalidate": "chat"},
+    )
 
 
 @router.post("/chat/stream", tags=["Chat"])
@@ -231,7 +274,6 @@ async def stream_message(
     document_ids: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
 ):
-    """Proxy streaming chat to main API — returns SSE."""
     data = {"message": message, "username": username}
     if chat_id:
         data["chat_id"] = chat_id
@@ -249,8 +291,7 @@ async def stream_message(
     async def proxy_stream():
         async with await rag_service._get_client() as client:
             async with client.stream(
-                "POST",
-                "/chat/stream",
+                "POST", "/chat/stream",
                 data=data,
                 files=files if files else None,
                 timeout=None,
@@ -266,6 +307,8 @@ async def stream_message(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            # بعد انتهاء الـ stream الـ frontend يعمل purge للـ chat cache
+            "X-Cache-Invalidate": "chat",
         },
     )
 
