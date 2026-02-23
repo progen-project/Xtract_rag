@@ -492,8 +492,24 @@ function startBatchMonitoring(batchId) {
   state.eventSource = Api.streamBatchProgress(
       batchId,
       (data) => {
-          // Ignore heartbeats and initial state for history/progress updates
-          if (data.type === 'initial_state' || data.type === 'heartbeat') return;
+          if (data.type === 'heartbeat') return;
+          
+          if (data.type === 'initial_state') {
+              if (data.files && Object.keys(data.files).length > 0) {
+                  const allDone = Object.values(data.files).every(f => ['completed', 'failed'].includes(f.status));
+                  if (allDone) {
+                      stopBatchMonitoring();
+                      showToast('Batch processing completed.', 'success');
+                  }
+              }
+              return;
+          }
+          
+          if (data.type === 'batch_completed') {
+              stopBatchMonitoring();
+              showToast('Batch processing completed.', 'success');
+              return;
+          }
           
           // Persist active batch
           localStorage.setItem('petrorag_active_batch_id', batchId);

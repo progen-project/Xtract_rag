@@ -55,6 +55,21 @@ class ProcessingStatusManager:
             # Put event in the queue for this batch
             if batch_id in self._events:
                 await self._events[batch_id].put(event_data)
+                
+                # Check if all files in this batch are completed or failed
+                all_done = True
+                for f, f_info in self._batches[batch_id].items():
+                    if f_info.get("status") not in ["completed", "failed"]:
+                        all_done = False
+                        break
+                
+                if all_done:
+                    completion_event = {
+                        "type": "batch_completed",
+                        "batch_id": batch_id,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    await self._events[batch_id].put(completion_event)
 
     async def stream_status(self, batch_id: str) -> AsyncGenerator[str, None]:
         """Stream status updates for a batch."""
