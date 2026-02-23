@@ -1,0 +1,102 @@
+# version: "3.9"
+
+services:
+
+  # ==========================================
+  # API
+  # ==========================================
+  api:
+    build: .
+    container_name: petrorag_api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - qdrant
+    env_file:
+      - .env
+    environment:
+      # MONGODB_URI is read from .env (cloud-hosted Atlas or any MongoDB URI)
+      - QDRANT_URL=http://qdrant:6333
+    volumes:
+      - ./uploads:/app/uploads
+      - ./active_docs:/app/active_docs
+      - ./extracted_images:/app/extracted_images
+      - ./chat_images:/app/chat_images
+    networks:
+      - petrorag_network
+    restart: unless-stopped
+
+
+  # ==========================================
+  # Qdrant
+  # ==========================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: petrorag_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - petrorag_network
+    restart: unless-stopped
+
+
+  # ==========================================
+  # Client Proxy
+  # Redis dependency removed — caching handled by Nginx
+  # ==========================================
+  client_proxy:
+    build:
+      context: .
+      dockerfile: python_client_app/Dockerfile
+    container_name: petrorag_client_proxy
+    ports:
+      - "8001:8001"
+    depends_on:
+      - api
+    environment:
+      RAG_API_URL: http://api:8080/api
+    networks:
+      - petrorag_network
+    restart: unless-stopped
+
+
+  # ==========================================
+  # NGINX Gateway  (handles caching via proxy_cache)
+  # ==========================================
+  nginx:
+    image: nginx:alpine
+    container_name: petrorag_gateway
+    ports:
+      - "8002:80"
+    volumes:
+      - ./client:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./extracted_images:/usr/share/nginx/images/extracted_images:ro
+      - ./chat_images:/usr/share/nginx/images/chat_images:ro
+      # Named volume so Nginx cache survives container restarts
+      - nginx_cache:/var/cache/nginx/api_cache
+    depends_on:
+      - api
+      - client_proxy
+    networks:
+      - petrorag_network
+    restart: unless-stopped
+
+
+# ==========================================
+# Volumes
+# ==========================================
+volumes:
+  qdrant_data:
+  nginx_cache:       # Nginx proxy_cache storage
+
+
+# ==========================================
+# Network
+# ==========================================
+networks:
+  petrorag_network:
+    driver: bridge
