@@ -13,14 +13,11 @@ services:
     depends_on:
       - mongo
       - qdrant
-      - redis
     env_file:
       - .env
     environment:
       - MONGODB_URI=mongodb://mongo:27017
-      - MONGODB_URI=mongodb://mongo:27017
       - QDRANT_URL=http://qdrant:6333
-      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./uploads:/app/uploads
       - ./active_docs:/app/active_docs
@@ -63,22 +60,8 @@ services:
 
 
   # ==========================================
-  # Redis (Cache Layer)
-  # ==========================================
-  redis:
-    image: redis:7-alpine
-    container_name: petrorag_redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - petrorag_network
-    restart: unless-stopped
-
-
-  # ==========================================
   # Client Proxy
+  # Redis dependency removed — caching handled by Nginx
   # ==========================================
   client_proxy:
     build:
@@ -89,17 +72,15 @@ services:
       - "8001:8001"
     depends_on:
       - api
-      - redis
     environment:
       RAG_API_URL: http://api:8080/api
-      REDIS_URL: redis://redis:6379/0
     networks:
       - petrorag_network
     restart: unless-stopped
 
 
   # ==========================================
-  # NGINX Gateway
+  # NGINX Gateway  (handles caching via proxy_cache)
   # ==========================================
   nginx:
     image: nginx:alpine
@@ -111,6 +92,8 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./extracted_images:/usr/share/nginx/images/extracted_images:ro
       - ./chat_images:/usr/share/nginx/images/chat_images:ro
+      # Named volume so Nginx cache survives container restarts
+      - nginx_cache:/var/cache/nginx/api_cache
     depends_on:
       - api
       - client_proxy
@@ -125,7 +108,7 @@ services:
 volumes:
   mongo_data:
   qdrant_data:
-  redis_data:
+  nginx_cache:       # Nginx proxy_cache storage (replaces Redis)
 
 
 # ==========================================
