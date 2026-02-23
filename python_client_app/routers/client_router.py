@@ -11,6 +11,7 @@ Cache Purge Strategy:
 """
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse, JSONResponse
 from typing import List, Optional
 import json
@@ -35,9 +36,10 @@ def _with_invalidate(data, scope: str):
     knows which cache scope to purge on its next GET.
 
     scope examples: "categories", "documents", "chat"
+    Uses jsonable_encoder to handle datetime and Pydantic objects correctly.
     """
     return JSONResponse(
-        content=data,
+        content=jsonable_encoder(data),
         headers={"X-Cache-Invalidate": scope},
     )
 
@@ -103,14 +105,14 @@ async def upload_documents(
     result = await rag_service.upload_documents(category_id, file_list, is_daily)
     # رفع document يغير documents + categories
     data = [r if isinstance(r, dict) else r.dict() for r in result]
-    return JSONResponse(content=data, headers={"X-Cache-Invalidate": "documents,categories"})
+    return JSONResponse(content=jsonable_encoder(data), headers={"X-Cache-Invalidate": "documents,categories"})
 
 
 @router.delete("/documents/{document_id}", tags=["Documents"])
 async def delete_document(document_id: str):
     result = await rag_service.delete_document(document_id)
     return JSONResponse(
-        content=result if isinstance(result, dict) else result,
+        content=jsonable_encoder(result if isinstance(result, dict) else result),
         headers={"X-Cache-Invalidate": "documents,categories"},
     )
 
@@ -119,7 +121,7 @@ async def delete_document(document_id: str):
 async def burn_document(document_id: str):
     result = await rag_service.burn_document(document_id)
     return JSONResponse(
-        content=result if isinstance(result, dict) else result,
+        content=jsonable_encoder(result if isinstance(result, dict) else result),
         headers={"X-Cache-Invalidate": "documents,categories"},
     )
 
@@ -160,7 +162,7 @@ async def view_document(document_id: str):
 async def cleanup_daily():
     result = await rag_service.cleanup_daily()
     return JSONResponse(
-        content=result if isinstance(result, dict) else result,
+        content=jsonable_encoder(result if isinstance(result, dict) else result),
         headers={"X-Cache-Invalidate": "documents,categories"},
     )
 
@@ -181,7 +183,7 @@ async def get_batch_status(batch_id: str):
 async def terminate_batch(batch_id: str):
     result = await rag_service.terminate_batch(batch_id)
     return JSONResponse(
-        content=result if isinstance(result, dict) else result.dict(),
+        content=jsonable_encoder(result if isinstance(result, dict) else result.dict()),
         headers={"X-Cache-Invalidate": "documents"},
     )
 
@@ -212,7 +214,7 @@ async def get_chat(chat_id: str, username: str):
 async def delete_chat(chat_id: str, username: str):
     result = await rag_service.delete_chat(chat_id, username)
     return JSONResponse(
-        content=result if isinstance(result, dict) else result,
+        content=jsonable_encoder(result if isinstance(result, dict) else result),
         headers={"X-Cache-Invalidate": "chat"},
     )
 
@@ -260,7 +262,7 @@ async def send_message(
 
     result = await rag_service.send_message(request, image_files)
     return JSONResponse(
-        content=result if isinstance(result, dict) else result.dict(),
+        content=jsonable_encoder(result if isinstance(result, dict) else result.dict()),
         headers={"X-Cache-Invalidate": "chat"},
     )
 
