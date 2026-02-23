@@ -1,108 +1,97 @@
 /**
- * cacheInvalidator.js
- * -------------------
- * بيراقب كل response جاي من الـ API.
- * لو لاقى header: X-Cache-Invalidate → بيحفظ الـ scope
- * اللي محتاج يتكلير.
- *
- * أي GET request جاي لنفس الـ scope هيتبعت مع X-No-Cache: 1
- * → Nginx بيعمل bypass للكاش ويجيب fresh data فوراً.
+ * cacheInvalidator.js — Vanilla JS, no modules, no bundler
+ * =========================================================
+ * بيعمل patch على window.fetch نفسه عشان كل الكود الموجود
+ * يشتغل تلقائي من غير ما تعدل سطر واحد في api.js أو app.js.
  *
  * الاستخدام:
- *   import { apiClient } from './cacheInvalidator.js';
- *
- *   // بدل fetch() العادي، استخدم:
- *   const res = await apiClient('/client-api/categories', { method: 'POST', ... });
- *   const res = await apiClient('/client-api/categories');
+ *   ضيف السكريبت ده قبل api.js في الـ HTML وخلاص:
+ *   <script src="js/cacheInvalidator.js"></script>
+ *   <script src="js/api.js"></script>
  */
 
-// Scopes اللي محتاجين purge دلوقتي
-const pendingPurges = new Set();
+(function (window) {
+  'use strict';
 
-/**
- * Map: كل scope → الـ URL prefixes المرتبطة بيه
- * لما scope يكون pending، أي GET على الـ prefixes دي بيتبعت بـ X-No-Cache: 1
- */
-const SCOPE_PREFIXES = {
-  categories: ['/client-api/categories'],
-  documents:  ['/client-api/documents', '/client-api/categories'],
-  chat:       ['/client-api/chat'],
-};
+  // Scopes اللي محتاجة cache bypass
+  var pendingPurges = {};
 
-/**
- * شايف URL ده محتاج purge ولا لأ؟
- */
-function needsPurge(url) {
-  for (const scope of pendingPurges) {
-    const prefixes = SCOPE_PREFIXES[scope] || [];
-    if (prefixes.some(prefix => url.includes(prefix))) {
-      return true;
+  // كل scope → الـ URL prefixes المرتبطة بيه
+  var SCOPE_PREFIXES = {
+    categories: ['/client-api/categories'],
+    documents:  ['/client-api/documents', '/client-api/categories'],
+    chat:       ['/client-api/chat'],
+  };
+
+  function needsPurge(url) {
+    for (var scope in pendingPurges) {
+      if (!pendingPurges[scope]) continue;
+      var prefixes = SCOPE_PREFIXES[scope] || [];
+      for (var i = 0; i < prefixes.length; i++) {
+        if (url.indexOf(prefixes[i]) !== -1) return true;
+      }
     }
-  }
-  return false;
-}
-
-/**
- * بعد ما عملنا purge request نافعة، نشيل الـ scope من القائمة
- */
-function clearPurgeScope(url) {
-  for (const scope of pendingPurges) {
-    const prefixes = SCOPE_PREFIXES[scope] || [];
-    if (prefixes.some(prefix => url.includes(prefix))) {
-      pendingPurges.delete(scope);
-    }
-  }
-}
-
-/**
- * الـ wrapper الرئيسي — استخدمه بدل fetch() في كل مكان
- *
- * @param {string} url
- * @param {RequestInit} options
- * @returns {Promise<Response>}
- */
-export async function apiClient(url, options = {}) {
-  const method = (options.method || 'GET').toUpperCase();
-  const headers = new Headers(options.headers || {});
-
-  // لو GET وفيه pending purge لنفس الـ scope → ابعت X-No-Cache: 1
-  if (method === 'GET' && needsPurge(url)) {
-    headers.set('X-No-Cache', '1');
+    return false;
   }
 
-  const response = await fetch(url, { ...options, headers });
-
-  // بعد أي mutation، اقرأ X-Cache-Invalidate وحفظ الـ scopes
-  if (method !== 'GET') {
-    const invalidateHeader = response.headers.get('X-Cache-Invalidate');
-    if (invalidateHeader) {
-      invalidateHeader.split(',').forEach(scope => {
-        pendingPurges.add(scope.trim());
-      });
-    }
-  } else {
-    // لو بعتنا X-No-Cache: 1 وجاء الـ response → الكاش اتكلير، شيل الـ scope
-    if (headers.get('X-No-Cache') === '1') {
-      clearPurgeScope(url);
+  function clearScopeForUrl(url) {
+    for (var scope in pendingPurges) {
+      if (!pendingPurges[scope]) continue;
+      var prefixes = SCOPE_PREFIXES[scope] || [];
+      for (var i = 0; i < prefixes.length; i++) {
+        if (url.indexOf(prefixes[i]) !== -1) {
+          pendingPurges[scope] = false;
+          break;
+        }
+      }
     }
   }
 
-  return response;
-}
+  // ── Patch window.fetch ────────────────────────────────────────────────────
+  var originalFetch = window.fetch.bind(window);
 
-/**
- * لو محتاج تعمل invalidation يدوي من أي حتة في الكود
- * مثلاً بعد SSE stream خلص
- *
- * @param {...string} scopes  e.g. invalidate('chat'), invalidate('documents', 'categories')
- */
-export function invalidate(...scopes) {
-  scopes.forEach(s => pendingPurges.add(s));
-}
+  window.fetch = function (resource, options) {
+    options = options || {};
+    var url    = (typeof resource === 'string') ? resource : resource.url;
+    var method = (options.method || 'GET').toUpperCase();
 
-/**
- * للـ debugging — شوف الـ pending scopes
- */
-export function getPendingPurges() {
-  return [...pendingPurges];
-}
+    // Clone headers so we don't mutate the caller's object
+    var headers = new Headers(options.headers || {});
+
+    // لو GET وفيه pending purge → ابعت X-No-Cache: 1
+    if (method === 'GET' && needsPurge(url)) {
+      headers.set('X-No-Cache', '1');
+    }
+
+    var patchedOptions = Object.assign({}, options, { headers: headers });
+
+    return originalFetch(resource, patchedOptions).then(function (response) {
+
+      if (method !== 'GET') {
+        // بعد أي mutation → اقرأ X-Cache-Invalidate وخزن الـ scopes
+        var invalidateHeader = response.headers.get('X-Cache-Invalidate');
+        if (invalidateHeader) {
+          invalidateHeader.split(',').forEach(function (scope) {
+            pendingPurges[scope.trim()] = true;
+          });
+        }
+      } else {
+        // لو بعتنا X-No-Cache: 1 → الكاش اتبايباس، امسح الـ scope
+        if (headers.get('X-No-Cache') === '1') {
+          clearScopeForUrl(url);
+        }
+      }
+
+      return response;
+    });
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // لو محتاج تعمل invalidation يدوي (مثلاً بعد chat stream يخلص)
+  window.invalidate = function () {
+    for (var i = 0; i < arguments.length; i++) {
+      pendingPurges[arguments[i]] = true;
+    }
+  };
+
+})(window);
