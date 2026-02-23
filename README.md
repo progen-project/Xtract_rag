@@ -25,8 +25,7 @@ PetroRAG is a Multimodal RAG (Retrieval-Augmented Generation) pipeline for petro
 ```
 Client → NGINX (8002) → Client Proxy (8001) → Main API (8080)
                                                     ├── MongoDB  (documents, chunks, chats)
-                                                    ├── Qdrant   (vector search)
-                                                    └── Redis    (status streaming)
+                                                    └── Qdrant   (vector search)                                                 
 ```
 
 **Core Services:**

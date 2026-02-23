@@ -3,7 +3,7 @@
 > **Version:** 1.0.0 | **Base URL:** `http://localhost:8001` | **Docs:** `/docs`  
 > **Prefix:** All endpoints are under `/client-api`
 
-The Python Client Proxy is a FastAPI gateway that sits between the frontend and the Main API. It adds Redis-backed caching, simplified type-safe DTOs, multipart forwarding, SSE proxying, and clean cache invalidation on mutations.
+The Python Client Proxy is a FastAPI gateway that sits between the frontend and the Main API. It adds Nginx-Caching caching, simplified type-safe DTOs, multipart forwarding, SSE proxying, and clean cache invalidation on mutations.
 
 ---
 
@@ -25,13 +25,12 @@ The Python Client Proxy is a FastAPI gateway that sits between the frontend and 
 ## Architecture & Purpose
 
 ```
-Frontend ──→ NGINX (8002) ──→ Client Proxy (8001) ──→ Main API (8080)
-                                    │
-                                  Redis (cache + SSE state)
+Frontend ──→ NGINX (Caching) (8002) ──→ Client Proxy (8001) ──→ Main API (8080)
+                                    
+                                 
 ```
 
 **What the proxy adds:**
-- **Redis caching** — GET responses cached (60s TTL) to avoid hammering the main API
 - **Cache invalidation** — mutations automatically clear related cache keys
 - **DTO enforcement** — strict Pydantic schemas; invalid main API responses raise errors here
 - **Multipart forwarding** — reads uploaded file bytes and re-streams them to the main API without saving locally
@@ -46,7 +45,6 @@ Frontend ──→ NGINX (8002) ──→ Client Proxy (8001) ──→ Main API
 
 ```env
 RAG_API_URL=http://localhost:8080/api   # Main API base URL
-REDIS_URL=redis://localhost:6379/0      # Redis connection
 ```
 
 ### Running
@@ -66,7 +64,6 @@ uvicorn>=0.30.1
 pydantic>=2.7.4
 httpx>=0.27.0
 python-multipart>=0.0.9
-redis>=5.0.0
 ```
 
 ---
@@ -131,7 +128,6 @@ All endpoints forward HTTP status codes from the main API. Additional proxy-leve
 }
 ```
 
-> **Redis failures are non-fatal** — if Redis is unavailable, the proxy serves uncached responses (logs a warning, does not crash).
 
 ---
 
