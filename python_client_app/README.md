@@ -798,6 +798,11 @@ evtSource.onmessage = (event) => {
 | `document_ids` | string (JSON) | ❌ | `null` | JSON array: `'["doc_abc123"]'` or CSV |
 | `images` | `UploadFile[]` | ❌ | `[]` | Up to 10 image files sent to vision model |
 
+> **Context Selection Logic:**  
+> - If **no categories or documents** are explicitly selected, the frontend automatically defaults to fetching and including **all documents across all categories**. 
+> - If a **category is selected without specifying individual documents**, the frontend automatically fetches and includes **all documents** within that category.  
+> - The backend receives explicit `category_ids` and `document_ids` lists based on these resolutions.
+
 **Example cURL:**
 ```bash
 curl -X POST "http://localhost:8001/client-api/chat" \

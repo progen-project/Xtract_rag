@@ -28,6 +28,7 @@ class ChatRepository:
         self,
         chat_id: str,
         username: str,
+        title: Optional[str] = None,
         category_ids: Optional[List[str]] = None,
         document_ids: Optional[List[str]] = None
     ) -> ChatSession:
@@ -36,6 +37,7 @@ class ChatRepository:
         chat = ChatSession(
             chat_id=chat_id,
             username=username,
+            title=title,
             category_ids=category_ids,
             document_ids=document_ids,
             messages=[],
@@ -101,3 +103,11 @@ class ChatRepository:
             logger.info(f"Deleted chat: {chat_id} for user: {username}")
             return True
         return False
+        
+    async def update_title(self, chat_id: str, username: str, title: str) -> bool:
+        """Update the title of a chat session."""
+        result = await self.collection.update_one(
+            {"_id": chat_id, "username": username},
+            {"$set": {"title": title, "updated_at": datetime.utcnow()}}
+        )
+        return result.modified_count > 0

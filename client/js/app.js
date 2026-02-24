@@ -1224,8 +1224,18 @@ async function sendMessage() {
           }
           scrollChatToBottom();
 
-          if (!state.selectedChatId && data.chat_id) {
+          const isNewChat = !state.selectedChatId;
+          if (isNewChat && data.chat_id) {
               state.selectedChatId = data.chat_id;
+              // Generate chat title in the background, then refresh list
+              Api.nameChat(data.chat_id, state.username)
+                  .then(() => loadChats())
+                  .catch(err => {
+                      console.error('Failed to name chat:', err);
+                      loadChats();
+                  });
+          } else if (data.chat_id) {
+              // Always refresh chat list to bring active chat to top
               loadChats();
           }
 

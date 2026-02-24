@@ -219,6 +219,14 @@ async def delete_chat(chat_id: str, username: str):
     )
 
 
+@router.post("/chat/{chat_id}/name", tags=["Chat"])
+async def name_chat(
+    chat_id: str,
+    username: str = Form(...),
+):
+    result = await rag_service.name_chat(chat_id, username)
+    return _with_invalidate(result if isinstance(result, dict) else result.dict(), "chat")
+
 @router.post("/chat", tags=["Chat"])
 async def send_message(
     message: str = Form(...),

@@ -31,6 +31,7 @@ class ChatSession(BaseModel):
     """A chat session with message history."""
     chat_id: str
     username: str
+    title: Optional[str] = None
     category_ids: Optional[List[str]] = None
     document_ids: Optional[List[str]] = None
     messages: List[ChatMessage] = Field(default_factory=list)

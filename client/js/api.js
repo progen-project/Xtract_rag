@@ -242,6 +242,17 @@ class Api {
         return res.json();
     }
 
+    static async nameChat(chatId, username) {
+        const formData = new FormData();
+        formData.append('username', username);
+        const res = await fetch(`${API_BASE}/chat/${chatId}/name`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    }
+
     static async sendMessage(message, username, chatId, categoryIds = [], documentIds = [], images = []) {
         const formData = new FormData();
         formData.append('message', message);

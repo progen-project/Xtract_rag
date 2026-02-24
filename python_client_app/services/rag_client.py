@@ -180,6 +180,15 @@ class RAGClientService:
             resp.raise_for_status()
             return resp.json()
 
+    async def name_chat(self, chat_id: str, username: str) -> dict:
+        async with await self._get_client() as client:
+            resp = await client.post(
+                f"/chat/{chat_id}/name",
+                data={"username": username}
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def send_message(self, request: ChatRequest, images: List[tuple] = None) -> ChatResponse:
         data = {
             "message": request.message,

@@ -676,6 +676,35 @@ class ChatController:
         
         return formatted_sources
     
+    async def name_chat(self, chat_id: str, username: str) -> dict:
+        """Generate and save a title for a chat based on its first interaction."""
+        chat = await self.chat_repo.get_by_id(chat_id, username)
+        if not chat:
+            from app.core.exceptions import ChatNotFoundError
+            raise ChatNotFoundError(chat_id)
+            
+        if chat.title:
+            return {"title": chat.title}
+            
+        first_user_msg = next((m.content for m in chat.messages if m.role == "user"), None)
+        first_ai_msg = next((m.content for m in chat.messages if m.role == "assistant"), None)
+        
+        if first_user_msg and first_ai_msg:
+            title = await self.llm.generate_chat_title(
+                first_user_message=first_user_msg,
+                first_assistant_reply=first_ai_msg
+            )
+        elif first_user_msg:
+            title = first_user_msg[:30] + "..." if len(first_user_msg) > 30 else first_user_msg
+        else:
+            title = "New Chat"
+            
+        success = await self.chat_repo.update_title(chat_id, username, title)
+        if not success:
+            logger.warning(f"Failed to update title for chat {chat_id}")
+            
+        return {"title": title}
+
     def _build_chat_context(self, messages: List[ChatMessage]) -> str:
         """Build context from chat history."""
         context_parts = []

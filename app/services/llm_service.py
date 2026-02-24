@@ -420,6 +420,44 @@ class LLMService:
     # STREAMING METHODS
     # ==========================================================
 
+    async def generate_chat_title(
+        self,
+        first_user_message: str,
+        first_assistant_reply: str
+    ) -> str:
+        """Generate a short 4-5 word title based on the first interaction."""
+        if not self.client:
+            return "New Chat"
+
+        system_prompt = (
+            "You are an AI assistant that generates very short, concise titles for chat sessions. "
+            "Based on the user's first message and the assistant's reply, provide a title of AT MOST 4-5 words. "
+            "Never use quotes. Only output the title string itself."
+        )
+
+        prompt = (
+            f"User: {first_user_message}\n"
+            f"Assistant: {first_assistant_reply}\n\n"
+            f"Generate a concise title:"
+        )
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.text_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=20
+            )
+            title = response.choices[0].message.content.strip().strip('"').strip("'")
+            return title if title else "New Chat"
+        except Exception as e:
+            logger.error(f"Error generating chat title: {str(e)}")
+            return "New Chat"
+
+
     async def generate_response_stream(
         self,
         query: str,

@@ -140,6 +140,16 @@ async def chat_stream(
     )
 
 
+@router.post("/{chat_id}/name")
+async def name_chat(
+    chat_id: str,
+    username: str = Form(...),
+    controller: ChatController = Depends(get_chat_controller)
+):
+    """Generate and return a short title for the chat session."""
+    return await controller.name_chat(chat_id, username)
+
+
 @router.get("", response_model=List[ChatSession])
 async def list_chats(
     username: str,
