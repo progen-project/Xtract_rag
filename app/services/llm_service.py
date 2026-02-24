@@ -430,15 +430,18 @@ class LLMService:
             return "New Chat"
 
         system_prompt = (
-            "You are an AI assistant that generates very short, concise titles for chat sessions. "
-            "Based on the user's first message and the assistant's reply, provide a title of AT MOST 4-5 words. "
-            "Never use quotes. Only output the title string itself."
+            "You are an AI assistant specialized in summarizing conversations into highly concise titles. "
+            "Your task is to provide a 3 to 5 word title for the chat based on the user's first message to you. "
+            "RULES:\n"
+            "- Output ONLY the title itself.\n"
+            "- NO quotes, NO punctuation at the end, NO introduction.\n"
+            "- Ignore the `<think>` process, just output the final title.\n"
+            "- Do not explain your reasoning."
         )
 
         prompt = (
             f"User: {first_user_message}\n"
-            f"Assistant: {first_assistant_reply}\n\n"
-            f"Generate a concise title:"
+            f"Generate a concise 3-5 word title for this topic:"
         )
 
         try:
@@ -449,9 +452,19 @@ class LLMService:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                max_tokens=20
+                max_tokens=50
             )
-            title = response.choices[0].message.content.strip().strip('"').strip("'")
+            raw_title = response.choices[0].message.content
+            
+            # Remove any <think>...</think> blocks from reasoning models
+            import re
+            cleaned_title = re.sub(r'<think>.*?</think>', '', raw_title, flags=re.DOTALL)
+            
+            title = cleaned_title.strip().strip('"').strip("'").strip()
+            # If the model still outputs something like "Title: ...", strip it
+            if title.lower().startswith("title:"):
+                title = title[6:].strip()
+                
             return title if title else "New Chat"
         except Exception as e:
             logger.error(f"Error generating chat title: {str(e)}")
