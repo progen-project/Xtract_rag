@@ -82,7 +82,12 @@ class ChatController:
         is_new_chat = chat_id is None
         if is_new_chat:
             chat_id = f"chat_{uuid.uuid4().hex[:12]}"
-            await self.chat_repo.create(chat_id, username, category_ids, document_ids)
+            await self.chat_repo.create(
+                chat_id=chat_id, 
+                username=username, 
+                category_ids=category_ids, 
+                document_ids=document_ids
+            )
         else:
             existing_chat = await self.chat_repo.get_by_id(chat_id, username)
             if not existing_chat:
@@ -343,7 +348,12 @@ class ChatController:
         is_new_chat = chat_id is None
         if is_new_chat:
             chat_id = f"chat_{uuid.uuid4().hex[:12]}"
-            await self.chat_repo.create(chat_id, username, category_ids, document_ids)
+            await self.chat_repo.create(
+                chat_id=chat_id, 
+                username=username, 
+                category_ids=category_ids, 
+                document_ids=document_ids
+            )
         else:
             existing_chat = await self.chat_repo.get_by_id(chat_id, username)
             if not existing_chat:
