@@ -451,14 +451,14 @@ class LLMService:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
-                max_tokens=50
+                temperature=0.2,
+                max_tokens=512
             )
             raw_title = response.choices[0].message.content
             
             # Remove any <think>...</think> blocks from reasoning models
             import re
-            cleaned_title = re.sub(r'<think>.*?</think>', '', raw_title, flags=re.DOTALL)
+            cleaned_title = re.sub(r'<think>.*?(?:</think>|$)', '', raw_title, flags=re.DOTALL)
             
             title = cleaned_title.strip().strip('"').strip("'").strip()
             # If the model still outputs something like "Title: ...", strip it
