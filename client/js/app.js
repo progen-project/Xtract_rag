@@ -852,39 +852,31 @@ function confirmStartChat() {
 async function startChatAsync(selectedCats) {
   showLoading();
   try {
+      // If no categories selected, default to ALL categories
+      if (selectedCats.length === 0) {
+          selectedCats = state.categories.map(c => c.category_id);
+      }
+
       let allSelectedDocIds = [];
-      let totalDocsInSelectedCats = 0;
       
       for (const catId of selectedCats) {
           const listContainer = document.getElementById(`list-${catId}`);
-          const cat = state.categories.find(c => c.category_id === catId);
-          totalDocsInSelectedCats += (cat ? cat.document_count : 0);
           
           if (listContainer && listContainer.children.length > 0) {
               // Docs loaded - get checked ones
               const checked = Array.from(listContainer.querySelectorAll('input[name="chat-doc"]:checked')).map(cb => cb.value);
               allSelectedDocIds.push(...checked);
           } else {
-              // Docs not loaded - fetch all
-              // Optimize: simple listDocumentsByCategory call
+              // Docs not loaded (category selected without expanding) - include ALL its docs
               const docs = await Api.listDocumentsByCategory(catId);
               allSelectedDocIds.push(...docs.map(d => d.document_id));
           }
       }
       
-      // If we selected ALL documents in the categories, we don't need to filter by doc ID
-      const isAllSelected = allSelectedDocIds.length === totalDocsInSelectedCats;
-      
+      // Always store all selected document IDs so the backend persists them in the chat session
       state.selectedCategoryIds = selectedCats;
-      state.selectedDocumentIds = isAllSelected ? [] : allSelectedDocIds;
+      state.selectedDocumentIds = allSelectedDocIds;
       state.selectedChatId = null;
-      
-      if (state.selectedCategoryIds.length === 0 && state.selectedDocumentIds.length === 0) {
-           if (!confirm('No categories or documents selected. Proceed with empty context?')) {
-               hideLoading();
-               return;
-           }
-      }
 
       document.getElementById('chat-messages').innerHTML = `
           <div class="message ai">
@@ -910,6 +902,9 @@ async function selectChat(id) {
 
   try {
       const chatSession = await Api.getChat(id, state.username);
+      // Restore filter context from the chat session
+      state.selectedCategoryIds = chatSession.category_ids || [];
+      state.selectedDocumentIds = chatSession.document_ids || [];
       renderChatHistory(chatSession.messages || []);
       switchView('chat');
       renderSidebarChats();
