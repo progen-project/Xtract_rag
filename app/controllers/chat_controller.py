@@ -54,6 +54,72 @@ class ChatController:
             document_repo=document_repo
         )
     
+    async def _resolve_search_filters(
+        self,
+        category_ids: Optional[List[str]],
+        document_ids: Optional[List[str]],
+    ) -> tuple:
+        """
+        Resolve category/document selection into concrete filter IDs.
+        
+        4 Cases:
+          1. Both null/empty   → general search (no filter)
+          2. Categories only   → expand to ALL documents in those categories
+          3. Documents only    → filter by those documents
+          4. Both provided     → documents win (category is UI context only)
+        
+        Returns:
+            (resolved_category_ids, resolved_document_ids)
+        """
+        has_categories = bool(category_ids)
+        has_documents = bool(document_ids)
+        
+        # Case 1: No filters → general search across everything
+        if not has_categories and not has_documents:
+            logger.info("Filter mode: GENERAL — no category/document filter applied")
+            return (None, None)
+        
+        # Case 4: Both provided → documents take priority
+        if has_categories and has_documents:
+            logger.info(
+                f"Filter mode: DOCUMENTS_PRIORITY — "
+                f"ignoring {len(category_ids)} categories, "
+                f"using {len(document_ids)} explicit documents: {document_ids}"
+            )
+            return (None, document_ids)
+        
+        # Case 3: Documents only
+        if has_documents:
+            logger.info(
+                f"Filter mode: DOCUMENTS_ONLY — "
+                f"filtering by {len(document_ids)} documents: {document_ids}"
+            )
+            return (None, document_ids)
+        
+        # Case 2: Categories only → expand to all documents in those categories
+        logger.info(
+            f"Filter mode: CATEGORIES_EXPAND — "
+            f"expanding {len(category_ids)} categories to their documents"
+        )
+        all_doc_ids = []
+        for cat_id in category_ids:
+            docs = await self.document_repo.get_by_category(cat_id)
+            cat_doc_ids = [doc.document_id for doc in docs]
+            logger.info(f"  Category {cat_id}: {len(cat_doc_ids)} documents")
+            all_doc_ids.extend(cat_doc_ids)
+        
+        if not all_doc_ids:
+            logger.warning(
+                "CATEGORIES_EXPAND resulted in 0 documents — "
+                "falling back to general search"
+            )
+            return (None, None)
+        
+        logger.info(
+            f"CATEGORIES_EXPAND resolved to {len(all_doc_ids)} documents: {all_doc_ids}"
+        )
+        return (category_ids, all_doc_ids)
+    
     async def send_message(
         self,
         message: str,
@@ -96,6 +162,11 @@ class ChatController:
                 category_ids = existing_chat.category_ids
             if document_ids is None:
                 document_ids = existing_chat.document_ids
+        
+        # Resolve filter logic (4 cases)
+        category_ids, document_ids = await self._resolve_search_filters(
+            category_ids, document_ids
+        )
         
         # Create user message
         user_message_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -362,6 +433,11 @@ class ChatController:
                 category_ids = existing_chat.category_ids
             if document_ids is None:
                 document_ids = existing_chat.document_ids
+        
+        # Resolve filter logic (4 cases)
+        category_ids, document_ids = await self._resolve_search_filters(
+            category_ids, document_ids
+        )
 
         # Create user message
         user_message_id = f"msg_{uuid.uuid4().hex[:12]}"

@@ -189,25 +189,30 @@ class UnifiedSearchService:
         document_ids: Optional[List[str]],
         category_ids: Optional[List[str]],
     ):
-        """Build Qdrant filters for document/category."""
-        if not document_ids and not category_ids:
-            return None
-
+        """
+        Build Qdrant filters for document/category.
+        
+        Priority: document_ids > category_ids > None
+        The controller resolves ambiguity before this point via
+        _resolve_search_filters(), so typically only one of these
+        will be non-empty.
+        """
         from qdrant_client.models import Filter, FieldCondition, MatchAny
 
-        conditions = []
-
+        # Document-level filter takes priority (most specific)
         if document_ids:
-            conditions.append(
+            return Filter(must=[
                 FieldCondition(key="document_id", match=MatchAny(any=document_ids))
-            )
+            ])
 
+        # Category-level filter as fallback
         if category_ids:
-            conditions.append(
+            return Filter(must=[
                 FieldCondition(key="category_id", match=MatchAny(any=category_ids))
-            )
+            ])
 
-        return Filter(must=conditions) if conditions else None
+        # No filter — search everything
+        return None
 
     def _search_text(
         self,

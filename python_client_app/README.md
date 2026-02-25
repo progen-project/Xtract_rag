@@ -782,6 +782,28 @@ evtSource.onmessage = (event) => {
 
 ---
 
+### `POST /client-api/chat/{chat_id}/name` — Generate Chat Title
+
+**Invalidates:** `get_chat:{username}:{chat_id}`, `list_chats:{username}*`
+
+**Path Parameter:** `chat_id` (string)  
+**Content-Type:** `multipart/form-data`
+
+**Form Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `username` | string | ✅ | User identifier |
+
+**Success Response — `200 OK`:**
+```json
+{
+  "title": "Generated Chat Title"
+}
+```
+
+---
+
 ### `POST /client-api/chat` — Send Message (Synchronous)
 
 **Invalidates:** `list_chats:{username}*`, `get_chat:{username}:{chat_id}` (if chat_id provided)  
