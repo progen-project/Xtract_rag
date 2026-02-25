@@ -3,10 +3,12 @@ Document API router.
 
 Thin router that delegates to DocumentController.
 """
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from typing import List, Optional
 import uuid
+import asyncio
+import logging
 from pathlib import Path
 
 from app.core.dependencies import (
@@ -19,12 +21,61 @@ from app.controllers import DocumentController, CategoryController
 from app.services.status import ProcessingStatusManager
 from app.schemas import DocumentMetadata, DocumentUploadResponse
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
+
+# Per-document processing timeout in seconds (10 minutes)
+DOCUMENT_PROCESSING_TIMEOUT = 1800
+
+
+async def _safe_process_document(
+    controller: DocumentController,
+    document_id: str,
+    batch_id: str,
+    filename: str,
+    status_manager: ProcessingStatusManager,
+    timeout: int = DOCUMENT_PROCESSING_TIMEOUT,
+):
+    """
+    Process a single document with timeout and error isolation.
+    
+    Each document runs as an independent asyncio task so that:
+    - One file hanging does NOT block other files in the batch
+    - A timeout prevents infinite hangs
+    - Errors are caught and status updated without affecting others
+    """
+    try:
+        await asyncio.wait_for(
+            controller.process_document(document_id, batch_id),
+            timeout=timeout
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            f"Document {document_id} ({filename}) timed out after {timeout}s"
+        )
+        try:
+            from app.schemas import DocumentStatus
+            await controller.document_repo.update_status(
+                document_id, DocumentStatus.FAILED, 
+                f"Processing timed out after {timeout} seconds"
+            )
+            await status_manager.update_file_status(
+                batch_id, filename, "failed",
+                f"Processing timed out after {timeout} seconds"
+            )
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(
+            f"Document {document_id} ({filename}) failed: {e}"
+        )
+        # process_document already handles its own error status updates,
+        # but we log here for visibility
 
 
 @router.post("/upload/{category_id}", response_model=List[DocumentUploadResponse])
 async def upload_document(
-    background_tasks: BackgroundTasks,
     category_id: str,
     files: List[UploadFile] = File(...),
     controller: DocumentController = Depends(get_document_controller),
@@ -78,11 +129,12 @@ async def upload_document(
             batch_id=batch_id
         )
         
-        # Process in background
-        background_tasks.add_task(
-            controller.process_document, 
-            response.document_id,
-            batch_id
+        # Process as independent concurrent task (NOT BackgroundTasks queue)
+        asyncio.create_task(
+            _safe_process_document(
+                controller, response.document_id, batch_id,
+                file.filename, status_manager
+            )
         )
         responses.append(response)
     
@@ -94,7 +146,6 @@ async def upload_document(
 
 @router.post("/upload/daily/{category_id}", response_model=List[DocumentUploadResponse])
 async def upload_daily_documents(
-    background_tasks: BackgroundTasks,
     category_id: str,
     files: List[UploadFile] = File(...),
     controller: DocumentController = Depends(get_document_controller),
@@ -111,16 +162,6 @@ async def upload_daily_documents(
     settings = container.settings
     
     # Get category for folder organization
-    try:
-        category = await category_controller.get_category(category_id)
-    except Exception:
-         # Optionally handle if category doesn't exist? 
-         # The controller checks it too, but we use name here.
-         # Let's rely on controller check or fetch it.
-         # We need category name for folder.
-         # So we must fetch it.
-         pass
-
     category = await category_controller.get_category(category_id)
     
     # Sanitize category name
@@ -161,10 +202,12 @@ async def upload_daily_documents(
             is_daily=True
         )
         
-        background_tasks.add_task(
-            controller.process_document, 
-            response.document_id,
-            batch_id
+        # Process as independent concurrent task (NOT BackgroundTasks queue)
+        asyncio.create_task(
+            _safe_process_document(
+                controller, response.document_id, batch_id,
+                file.filename, status_manager
+            )
         )
         responses.append(response)
     

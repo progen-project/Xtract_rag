@@ -215,7 +215,7 @@ class DocumentController:
                         batch_id, filename, "analyzing_images", f"Analyzing {len(images)} images..."
                     )
                 
-                logger.info(f"Analyzing {len(images)} images with vision model...")
+                logger.info(f"Analyzing {len(images)} images with vision model (concurrent)...")
                 # Prepare context map: image_id -> list of text
                 image_context_map = {}
                 for chunk in chunks:
@@ -225,22 +225,23 @@ class DocumentController:
                                 image_context_map[img_id] = []
                             image_context_map[img_id].append(chunk.content)
                 
-                for img in images:
+                async def _analyze_single_image(img):
+                    """Analyze a single image — designed for concurrent execution."""
                     try:
                         if img.image_path:
-                            # Get context text for this image
-                            context_text = "\n".join(image_context_map.get(img.image_id, []))[:2000] # Limit context size
-                            
+                            context_text = "\n".join(image_context_map.get(img.image_id, []))[:2000]
                             analysis = await self.llm_service.analyze_image(
                                 image=img,
                                 context_text=context_text if context_text else None
                             )
                             img.analysis = analysis
-                            # Use analysis as caption if missing
                             if not img.caption:
                                 img.caption = analysis[:200] + "..." if len(analysis) > 200 else analysis
                     except Exception as e:
                         logger.warning(f"Failed to analyze image {img.image_id}: {e}")
+                
+                import asyncio
+                await asyncio.gather(*(_analyze_single_image(img) for img in images))
 
             # Store and index images
             if images:
