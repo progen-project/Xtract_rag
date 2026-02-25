@@ -333,27 +333,14 @@ class Indexer:
             return 0
         
         table_collection = f"{self.settings.qdrant_collection}_tables"
+        points = []
         
-        # Pre-process: extract table texts and metadata
-        valid_tables = []
-        table_texts = []
         for table in tables:
             table_text = self._table_to_text(table)
-            if table_text:
-                valid_tables.append(table)
-                table_texts.append(table_text)
-        
-        if not table_texts:
-            return 0
-        
-        # Batch generate embeddings
-        logger.info(f"Generating dense and sparse embeddings for {len(table_texts)} tables in batch...")
-        embeddings = self.embed_model.get_text_embedding_batch(table_texts)
-        sparse_embeddings = list(self.sparse_embed_model.embed(table_texts))
-        
-        points = []
-        for i, table in enumerate(valid_tables):
-            embedding = embeddings[i]
+            if not table_text:
+                continue
+            
+            embedding = self.embed_model.get_text_embedding(table_text)
             
             markdown = table.get("markdown_content") or table.get("markdown", "")
             
@@ -366,8 +353,8 @@ class Indexer:
             if not section_title and "section" in table:
                 section_title = table["section"]
             
-            # Retrieve sparse embedding from batch
-            sparse_gen = sparse_embeddings[i]
+            # Generate sparse embedding
+            sparse_gen = list(self.sparse_embed_model.embed([table_text]))[0]
             sparse_vector = SparseVector(
                 indices=sparse_gen.indices.tolist(),
                 values=sparse_gen.values.tolist()
