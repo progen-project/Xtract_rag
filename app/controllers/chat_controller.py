@@ -343,13 +343,12 @@ class ChatController:
         )
         
         # Intelligent Source Attachment: Filter sources to only those cited by the LLM
-        if not inline_citations:
-            logger.info("No citations found in answer. Clearing sources.")
-            sources = {}
-        else:
+        if inline_citations:
             cited_doc_ids = {c["document_id"] for c in inline_citations}
             sources = {doc_id: data for doc_id, data in sources.items() if doc_id in cited_doc_ids}
-            logger.info(f"Filtered sources: kept {len(sources)} cited documents.")
+            logger.info(f"Filtered sources to {len(sources)} cited documents.")
+        else:
+            logger.info(f"No inline citations found. Keeping all {len(sources)} sources.")
         
         # ========================================
         # STEP 7: Create assistant message
@@ -570,13 +569,12 @@ class ChatController:
         )
         
         # Intelligent Source Attachment: Filter sources to only those cited by the LLM
-        if not inline_citations:
-            logger.info("No citations found in streaming answer. Clearing sources.")
-            sources = {}
-        else:
+        if inline_citations:
             cited_doc_ids = {c["document_id"] for c in inline_citations}
             sources = {doc_id: data for doc_id, data in sources.items() if doc_id in cited_doc_ids}
-            logger.info(f"Filtered sources: kept {len(sources)} cited documents.")
+            logger.info(f"Filtered sources to {len(sources)} cited documents.")
+        else:
+            logger.info(f"No inline citations found. Keeping all {len(sources)} sources.")
 
         # STEP 8: Save assistant message
         assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
