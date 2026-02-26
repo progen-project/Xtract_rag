@@ -957,7 +957,7 @@ function renderMessageContent(msg) {
 
       // Replace [filename, Page X-Y] patterns with styled badges
       content = content.replace(
-          /\[([^\[\]]+?\.\w{2,5}),\s*Page[s]?\s*([\d\-–]+)\]/g,
+          /\[(.+?\.\w{2,5}),\s*Page[s]?\s*([\d\-–]+)\]/g,
           (match, filename, pageRange) => {
               // Handle potential HTML escaping from marked.parse
               const unescapedFilename = filename
@@ -991,7 +991,7 @@ function renderMessageContent(msg) {
       }
 
       content = content.replace(
-          /\[([^\[\]]+?\.\w{2,5}),\s*Page[s]?\s*([\d\-–]+)\]/g,
+          /\[(.+?\.\w{2,5}),\s*Page[s]?\s*([\d\-–]+)\]/g,
           (match, filename, pageRange) => {
               // Handle potential HTML escaping
               const unescapedFilename = filename

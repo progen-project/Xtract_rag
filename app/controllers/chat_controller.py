@@ -634,38 +634,67 @@ class ChatController:
                 "page_end": chunk.page_end,
             }
         
+        # Build filename -> doc info lookup from sources_map
+        filename_doc_map = {}
+        for doc_id, source_info in sources_map.items():
+            if isinstance(source_info, dict) and source_info.get("filename"):
+                filename_doc_map[source_info["filename"]] = {
+                    "document_id": doc_id,
+                    "filename": source_info["filename"],
+                }
+        
         def replace_citation(match):
-            source_num = int(match.group(1))
+            group1 = match.group(1)  # Could be "Source N" or "filename.pdf"
             page_range = match.group(2)
             
-            if source_num in chunk_doc_map:
-                info = chunk_doc_map[source_num]
-                
-                # Parse page numbers from the citation
-                pages = []
-                for part in page_range.split("-"):
-                    part = part.strip()
-                    if part.isdigit():
-                        pages.append(int(part))
-                
+            # Parse page numbers
+            pages = []
+            for part in re.split(r'[-–]', page_range):
+                part = part.strip()
+                if part.isdigit():
+                    pages.append(int(part))
+            
+            # Case 1: [Source N, Page X-Y]
+            source_match = re.match(r'Source\s+(\d+)', group1)
+            if source_match:
+                source_num = int(source_match.group(1))
+                if source_num in chunk_doc_map:
+                    info = chunk_doc_map[source_num]
+                    inline_citations.append({
+                        "source_number": source_num,
+                        "document_id": info["document_id"],
+                        "filename": info["filename"],
+                        "section_title": info["section_title"],
+                        "pages": pages or [info["page_start"], info["page_end"]],
+                    })
+                    return f'[{info["filename"]}, Page {page_range}]'
+                return match.group(0)
+            
+            # Case 2: [filename.pdf, Page X-Y] — lookup by filename
+            filename = group1.strip()
+            if filename in filename_doc_map:
+                info = filename_doc_map[filename]
                 inline_citations.append({
-                    "source_number": source_num,
                     "document_id": info["document_id"],
                     "filename": info["filename"],
-                    "section_title": info["section_title"],
-                    "pages": pages or [info["page_start"], info["page_end"]],
+                    "section_title": "",
+                    "pages": pages,
                 })
-                
-                return f'[{info["filename"]}, Page {page_range}]'
+                return match.group(0)  # Keep as-is, already has filename
             
-            return match.group(0)  # Keep original if source number not found
+            return match.group(0)
         
-        # Flexible pattern for [Source N, Page X-Y] or variants like [Source N, p. X]
-        # Handles: Page, Pages, p., p, and various whitespace/separators
+        # Match both [Source N, Page X-Y] and [filename.pdf, Page X-Y]
+        enriched = re.sub(
+            r'\[(.+?\.\w{2,5}),\s*(?:Pages?|p\.?)\s*([\d\-–]+)\]',
+            replace_citation,
+            answer
+        )
+        # Also match [Source N, Page X-Y] format
         enriched = re.sub(
             r'\[Source\s+(\d+),\s*(?:Pages?|p\.?)\s*([\d\-–]+)\]',
             replace_citation,
-            answer
+            enriched
         )
         
         logger.info(f"Enriched {len(inline_citations)} inline citations")
