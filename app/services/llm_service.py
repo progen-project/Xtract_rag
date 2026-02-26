@@ -1,8 +1,9 @@
 """
-FIXED LLM Service for GROQ API with proper multimodal support.
+LLM Service for Kimi (Moonshot AI) API with proper multimodal support.
 Images sent as vision API format, NOT as base64 text in context.
+Uses the OpenAI SDK pointed at Moonshot's API endpoint.
 """
-from groq import Groq, AsyncGroq
+from openai import AsyncOpenAI
 from typing import List, Optional, Dict, Any
 import logging
 import base64
@@ -155,27 +156,27 @@ Otherwise, respond in English by default.
 
 class LLMService:
     """
-    LLM service using GROQ API with Qwen models.
+    LLM service using Kimi (Moonshot AI) API.
     Supports text generation and multimodal (vision) queries.
+    Uses the OpenAI SDK with Moonshot's base_url.
     """
 
     def __init__(self):
         self.settings = get_settings()
-        self.client: Optional[AsyncGroq] = None
-        self.text_model = self.settings.qwen_text_model
-        self.vision_model = self.settings.groq_vision_model
+        self.client: Optional[AsyncOpenAI] = None
+        self.model = self.settings.moonshot_model
 
     def initialize(self) -> None:
-        """Initialize the GROQ client."""
-        if not self.settings.groq_api_key:
-            logger.warning("GROQ API key not configured")
+        """Initialize the Kimi/Moonshot client via OpenAI SDK."""
+        if not self.settings.moonshot_api_key:
+            logger.warning("Moonshot API key not configured")
             return
 
-        import os
-        os.environ["GROQ_API_KEY"] = self.settings.groq_api_key
-
-        self.client = AsyncGroq()
-        logger.info(f"Initialized GROQ client (text: {self.text_model}, vision: {self.vision_model})")
+        self.client = AsyncOpenAI(
+            api_key=self.settings.moonshot_api_key,
+            base_url="https://api.moonshot.ai/v1",
+        )
+        logger.info(f"Initialized Kimi/Moonshot client (model: {self.model})")
 
     # ----------------------------------------------------------
     # HELPER: build text-only context string from chunks
@@ -271,7 +272,7 @@ class LLMService:
                 try:
                     user_content.append({
                         "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}", "detail": "low"},
+                        "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}"},
                     })
                 except Exception as e:
                     logger.warning(f"Could not load retrieved image {img_path}: {e}")
@@ -281,7 +282,7 @@ class LLMService:
                 try:
                     user_content.append({
                         "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}", "detail": "high"},
+                        "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}"},
                     })
                 except Exception as e:
                     logger.warning(f"Could not load user image {img_path}: {e}")
@@ -298,7 +299,7 @@ class LLMService:
     ) -> str:
         """Generate a TEXT-ONLY response (no images)."""
         if not self.client:
-            raise ValueError("GROQ client not initialized. Check API key.")
+            raise ValueError("Kimi/Moonshot client not initialized. Check API key.")
 
         context = self._build_context(context_chunks)
         prompt = system_prompt or _BASE_RAG_SYSTEM
@@ -310,7 +311,7 @@ class LLMService:
 
         try:
             response = await self.client.chat.completions.create(
-                model=self.text_model,
+                model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,
@@ -327,7 +328,7 @@ class LLMService:
     ) -> str:
         """Generate a direct response without RAG context."""
         if not self.client:
-            raise ValueError("GROQ client not initialized")
+            raise ValueError("Kimi/Moonshot client not initialized")
 
         messages = [
             {"role": "system", "content": system_prompt or _DIRECT_RESPONSE_SYSTEM},
@@ -336,7 +337,7 @@ class LLMService:
 
         try:
             response = await self.client.chat.completions.create(
-                model=self.text_model,
+                model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,
@@ -358,7 +359,7 @@ class LLMService:
     ) -> str:
         """Generate response with PROPER multimodal handling."""
         if not self.client:
-            raise ValueError("GROQ client not initialized")
+            raise ValueError("Kimi/Moonshot client not initialized")
 
         context_text = self._build_multimodal_context(
             context_chunks, tables, retrieved_images, max_retrieved_images
@@ -374,17 +375,17 @@ class LLMService:
 
         if retrieved_images or user_uploaded_images:
             try:
-                logger.info(f"Calling vision model: {self.vision_model}")
+                logger.info(f"Calling model with vision input: {self.model}")
                 response = await self.client.chat.completions.create(
-                    model=self.vision_model,
+                    model=self.model,
                     messages=messages,
                     temperature=self.settings.llm_temperature,
                     max_tokens=self.settings.llm_max_tokens,
                 )
-                logger.info("Vision model response generated successfully")
+                logger.info("Multimodal response generated successfully")
                 return response.choices[0].message.content
             except Exception as e:
-                logger.warning(f"Vision model failed: {e}. Falling back to text-only.")
+                logger.warning(f"Multimodal call failed: {e}. Falling back to text-only.")
 
         # Fallback: text-only
         try:
@@ -403,7 +404,7 @@ class LLMService:
             fallback_context = "\n".join(fallback_parts)
 
             response = await self.client.chat.completions.create(
-                model=self.text_model,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": _BASE_RAG_SYSTEM},
                     {"role": "user", "content": f"Context:\n{fallback_context}\n\nNote: Images are referenced in the context but could not be rendered.\n\nQuestion: {query}"},
@@ -446,7 +447,7 @@ class LLMService:
 
         try:
             response = await self.client.chat.completions.create(
-                model=self.text_model,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
@@ -479,7 +480,7 @@ class LLMService:
     ):
         """Stream a TEXT-ONLY response token-by-token."""
         if not self.client:
-            raise ValueError("GROQ client not initialized. Check API key.")
+            raise ValueError("Kimi/Moonshot client not initialized. Check API key.")
 
         context = self._build_context(context_chunks)
         prompt = system_prompt or _BASE_RAG_SYSTEM
@@ -491,7 +492,7 @@ class LLMService:
 
         try:
             stream = await self.client.chat.completions.create(
-                model=self.text_model,
+                model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,
@@ -512,7 +513,7 @@ class LLMService:
     ):
         """Stream a direct response without RAG context."""
         if not self.client:
-            raise ValueError("GROQ client not initialized")
+            raise ValueError("Kimi/Moonshot client not initialized")
 
         messages = [
             {"role": "system", "content": system_prompt or _DIRECT_RESPONSE_SYSTEM},
@@ -521,7 +522,7 @@ class LLMService:
 
         try:
             stream = await self.client.chat.completions.create(
-                model=self.text_model,
+                model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,
@@ -547,7 +548,7 @@ class LLMService:
     ):
         """Stream a multimodal response token-by-token."""
         if not self.client:
-            raise ValueError("GROQ client not initialized")
+            raise ValueError("Kimi/Moonshot client not initialized")
 
         context_text = self._build_multimodal_context(
             context_chunks, tables, retrieved_images, max_retrieved_images
@@ -563,9 +564,9 @@ class LLMService:
 
         if retrieved_images or user_uploaded_images:
             try:
-                logger.info(f"Streaming vision model: {self.vision_model}")
+                logger.info(f"Streaming multimodal response: {self.model}")
                 stream = await self.client.chat.completions.create(
-                    model=self.vision_model,
+                    model=self.model,
                     messages=messages,
                     temperature=self.settings.llm_temperature,
                     max_tokens=self.settings.llm_max_tokens,
@@ -577,12 +578,12 @@ class LLMService:
                         yield delta.content
                 return  # Vision succeeded
             except Exception as e:
-                logger.warning(f"Vision stream failed: {e}. Falling back to text-only.")
+                logger.warning(f"Multimodal stream failed: {e}. Falling back to text-only.")
 
         # Fallback: text-only stream
         try:
             stream = await self.client.chat.completions.create(
-                model=self.text_model,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": _BASE_RAG_SYSTEM},
                     {"role": "user", "content": (
@@ -641,7 +642,7 @@ class LLMService:
     ) -> str:
         """Analyze a single image using vision model."""
         if not self.client:
-            raise ValueError("GROQ client not initialized")
+            raise ValueError("Kimi/Moonshot client not initialized")
 
         if not Path(image.image_path).exists():
             return f"Image not available: {image.image_path}"
@@ -672,7 +673,7 @@ class LLMService:
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{image_data}", "detail": "high"},
+                        "image_url": {"url": f"data:image/png;base64,{image_data}"},
                     },
                 ],
             },
@@ -680,7 +681,7 @@ class LLMService:
 
         try:
             response = await self.client.chat.completions.create(
-                model=self.vision_model,
+                model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,

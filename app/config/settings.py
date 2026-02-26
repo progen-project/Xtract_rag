@@ -17,10 +17,9 @@ class Settings(BaseSettings):
     # Redis Configuration
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     
-    # GROQ API Configuration
-    groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
-    qwen_text_model: str = Field(default="qwen/qwen3-32b", alias="QWEN_TEXT_MODEL")
-    groq_vision_model: str = Field(default="meta-llama/llama-4-maverick-17b-128e-instruct", alias="GROQ_VISION_MODEL")
+    # Kimi / Moonshot API Configuration
+    moonshot_api_key: str = Field(default="", alias="MOONSHOT_API_KEY")
+    moonshot_model: str = Field(default="kimi-k2.5", alias="MOONSHOT_MODEL")
     llm_temperature: float = Field(default=0.0, alias="LLM_TEMPERATURE")
     llm_max_tokens: int = Field(default=5000, alias="LLM_MAX_TOKENS")
     
