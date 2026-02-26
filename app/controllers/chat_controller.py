@@ -733,10 +733,11 @@ class ChatController:
             # Add page
             sources_map[doc_id]["pages"].add(result.page_number)
             
-            # Update max score
+            # Update max score (use original similarity, not reranker score)
+            original_score = getattr(result, 'similarity_score', 0) or result.score
             sources_map[doc_id]["max_score"] = max(
                 sources_map[doc_id]["max_score"],
-                result.score
+                original_score
             )
             
             # Track source type

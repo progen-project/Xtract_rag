@@ -23,6 +23,7 @@ class SearchResult:
     document_id: str
     page_number: int
     section_title: str = ""
+    similarity_score: float = 0.0  # Original pre-rerank score
 
     # Type-specific fields
     chunk_id: Optional[str] = None
@@ -169,6 +170,7 @@ class UnifiedSearchService:
             rerank_scores = self.rerank_service.rerank(query_text, doc_texts)
 
             for i, score in enumerate(rerank_scores):
+                candidates[i].similarity_score = candidates[i].score  # preserve original
                 candidates[i].score = score
 
             candidates.sort(key=lambda x: x.score, reverse=True)
