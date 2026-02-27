@@ -17,9 +17,10 @@ class Settings(BaseSettings):
     # Redis Configuration
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     
-    # Kimi / Moonshot API Configuration
-    moonshot_api_key: str = Field(default="", alias="MOONSHOT_API_KEY")
-    moonshot_model: str = Field(default="kimi-k2.5", alias="MOONSHOT_MODEL")
+    # LLM API Configuration (DeepInfra / OpenAI-compatible)
+    llm_api_key: str = Field(default="", alias="LLM_API_KEY")
+    llm_model: str = Field(default="meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", alias="LLM_MODEL")
+    llm_base_url: str = Field(default="https://api.deepinfra.com/v1/openai", alias="LLM_BASE_URL")
     llm_temperature: float = Field(default=0.0, alias="LLM_TEMPERATURE")
     llm_max_tokens: int = Field(default=5000, alias="LLM_MAX_TOKENS")
     

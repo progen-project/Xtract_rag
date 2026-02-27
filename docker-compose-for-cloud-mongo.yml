@@ -58,6 +58,10 @@ services:
       - api
     environment:
       RAG_API_URL: http://api:8080/api
+    volumes:
+      - ./extracted_images:/app/extracted_images:ro
+      - ./chat_images:/app/chat_images:ro
+      - ./active_docs:/app/active_docs:ro
     networks:
       - petrorag_network
     restart: unless-stopped

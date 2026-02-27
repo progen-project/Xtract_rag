@@ -155,7 +155,7 @@ def _register_root_endpoints(app: FastAPI) -> None:
             "status": "healthy",
             "services": {
                 "mongodb": "connected" if container.base_repo.is_connected else "disconnected",
-                "llm": "configured" if container.settings.moonshot_api_key else "not configured",
+                "llm": "configured" if container.settings.llm_api_key else "not configured",
                 "indexer": "initialized" if container.indexer._initialized else "not initialized"
             }
         }

@@ -1,7 +1,7 @@
 """
-LLM Service for Kimi (Moonshot AI) API with proper multimodal support.
+LLM Service using an OpenAI-compatible provider (DeepInfra by default).
 Images sent as vision API format, NOT as base64 text in context.
-Uses the OpenAI SDK pointed at Moonshot's API endpoint.
+Uses the OpenAI SDK pointed at the configured LLM_BASE_URL.
 """
 from openai import AsyncOpenAI
 from typing import List, Optional, Dict, Any
@@ -156,27 +156,26 @@ Otherwise, respond in English by default.
 
 class LLMService:
     """
-    LLM service using Kimi (Moonshot AI) API.
+    LLM service using an OpenAI-compatible API (DeepInfra by default).
     Supports text generation and multimodal (vision) queries.
-    Uses the OpenAI SDK with Moonshot's base_url.
     """
 
     def __init__(self):
         self.settings = get_settings()
         self.client: Optional[AsyncOpenAI] = None
-        self.model = self.settings.moonshot_model
+        self.model = self.settings.llm_model
 
     def initialize(self) -> None:
-        """Initialize the Kimi/Moonshot client via OpenAI SDK."""
-        if not self.settings.moonshot_api_key:
-            logger.warning("Moonshot API key not configured")
+        """Initialize the LLM client via OpenAI SDK."""
+        if not self.settings.llm_api_key:
+            logger.warning("LLM API key not configured (LLM_API_KEY)")
             return
 
         self.client = AsyncOpenAI(
-            api_key=self.settings.moonshot_api_key,
-            base_url="https://api.moonshot.ai/v1",
+            api_key=self.settings.llm_api_key,
+            base_url=self.settings.llm_base_url,
         )
-        logger.info(f"Initialized Kimi/Moonshot client (model: {self.model})")
+        logger.info(f"Initialized LLM client (model: {self.model}, base_url: {self.settings.llm_base_url})")
 
     # ----------------------------------------------------------
     # HELPER: build text-only context string from chunks
@@ -299,7 +298,7 @@ class LLMService:
     ) -> str:
         """Generate a TEXT-ONLY response (no images)."""
         if not self.client:
-            raise ValueError("Kimi/Moonshot client not initialized. Check API key.")
+            raise ValueError("LLM client not initialized. Check LLM_API_KEY.")
 
         context = self._build_context(context_chunks)
         prompt = system_prompt or _BASE_RAG_SYSTEM
@@ -328,7 +327,7 @@ class LLMService:
     ) -> str:
         """Generate a direct response without RAG context."""
         if not self.client:
-            raise ValueError("Kimi/Moonshot client not initialized")
+            raise ValueError("LLM client not initialized")
 
         messages = [
             {"role": "system", "content": system_prompt or _DIRECT_RESPONSE_SYSTEM},
@@ -359,7 +358,7 @@ class LLMService:
     ) -> str:
         """Generate response with PROPER multimodal handling."""
         if not self.client:
-            raise ValueError("Kimi/Moonshot client not initialized")
+            raise ValueError("LLM client not initialized")
 
         context_text = self._build_multimodal_context(
             context_chunks, tables, retrieved_images, max_retrieved_images
@@ -480,7 +479,7 @@ class LLMService:
     ):
         """Stream a TEXT-ONLY response token-by-token."""
         if not self.client:
-            raise ValueError("Kimi/Moonshot client not initialized. Check API key.")
+            raise ValueError("LLM client not initialized. Check LLM_API_KEY.")
 
         context = self._build_context(context_chunks)
         prompt = system_prompt or _BASE_RAG_SYSTEM
@@ -513,7 +512,7 @@ class LLMService:
     ):
         """Stream a direct response without RAG context."""
         if not self.client:
-            raise ValueError("Kimi/Moonshot client not initialized")
+            raise ValueError("LLM client not initialized")
 
         messages = [
             {"role": "system", "content": system_prompt or _DIRECT_RESPONSE_SYSTEM},
@@ -548,7 +547,7 @@ class LLMService:
     ):
         """Stream a multimodal response token-by-token."""
         if not self.client:
-            raise ValueError("Kimi/Moonshot client not initialized")
+            raise ValueError("LLM client not initialized")
 
         context_text = self._build_multimodal_context(
             context_chunks, tables, retrieved_images, max_retrieved_images
@@ -642,7 +641,7 @@ class LLMService:
     ) -> str:
         """Analyze a single image using vision model."""
         if not self.client:
-            raise ValueError("Kimi/Moonshot client not initialized")
+            raise ValueError("LLM client not initialized")
 
         if not Path(image.image_path).exists():
             return f"Image not available: {image.image_path}"
