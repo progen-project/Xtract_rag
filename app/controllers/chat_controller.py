@@ -381,11 +381,22 @@ class ChatController:
         
         logger.info(f"Responding with {len(image_results)} image results, {len(inline_citations)} inline citations")
         
+        # Auto-generate title on first response
+        title = None
+        if is_new_chat:
+            try:
+                title_result = await self.name_chat(chat_id, username)
+                title = title_result.get("title")
+                logger.info(f"Auto-generated chat title: {title}")
+            except Exception as e:
+                logger.warning(f"Failed to auto-generate chat title: {e}")
+        
         return ChatResponse(
             chat_id=chat_id,
             username=username,
             message_id=assistant_message_id,
             answer=answer,
+            title=title,
             sources=sources,
             inline_citations=inline_citations,
             image_results=image_results
@@ -492,7 +503,16 @@ class ChatController:
             )
             await self.chat_repo.add_message(chat_id, assistant_message)
             
-            yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'username': username, 'message_id': assistant_message_id, 'answer': full_answer, 'sources': {}, 'inline_citations': [], 'image_results': []})}\n\n"
+            # Auto-generate title on first response
+            title = None
+            if is_new_chat:
+                try:
+                    title_result = await self.name_chat(chat_id, username)
+                    title = title_result.get("title")
+                except Exception as e:
+                    logger.warning(f"Failed to auto-generate chat title (stream/direct): {e}")
+            
+            yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'username': username, 'message_id': assistant_message_id, 'answer': full_answer, 'title': title, 'sources': {}, 'inline_citations': [], 'image_results': []})}\n\n"
             return
 
         search_results = self.search_service.search(
@@ -602,8 +622,18 @@ class ChatController:
             for img in images_from_search
         ]
 
+        # Auto-generate title on first response
+        title = None
+        if is_new_chat:
+            try:
+                title_result = await self.name_chat(chat_id, username)
+                title = title_result.get("title")
+                logger.info(f"Auto-generated chat title (stream): {title}")
+            except Exception as e:
+                logger.warning(f"Failed to auto-generate chat title (stream): {e}")
+
         # STEP 9: Send final event with metadata
-        yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'username': username, 'message_id': assistant_message_id, 'answer': answer, 'sources': sources, 'inline_citations': inline_citations, 'image_results': image_results})}\n\n"
+        yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'username': username, 'message_id': assistant_message_id, 'answer': answer, 'title': title, 'sources': sources, 'inline_citations': inline_citations, 'image_results': image_results})}\n\n"
     
     def _enrich_inline_citations(
         self,
