@@ -222,8 +222,6 @@ class ChatController:
             logger.info("Message irrelevant to domain. Using direct path.")
             answer = await self.llm.generate_direct_response(message)
             
-            # Strip <think>...</think> blocks
-            answer = re.sub(r'<think>.*?(?:</think>|$)', '', answer, flags=re.DOTALL).strip()
             
             # Create assistant message (no sources/images for irrelevant queries)
             assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -353,9 +351,6 @@ class ChatController:
             
             logger.info("Response generated successfully")
             
-            # Strip <think>...</think> blocks
-            import re
-            answer = re.sub(r'<think>.*?(?:</think>|$)', '', answer, flags=re.DOTALL).strip()
             
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
@@ -522,10 +517,6 @@ class ChatController:
                 full_answer += token
                 yield f"data: {json_mod.dumps({'token': token})}\n\n"
             
-            # Strip <think>...</think> blocks
-            import re
-            full_answer = re.sub(r'<think>.*?(?:</think>|$)', '', full_answer, flags=re.DOTALL).strip()
-            
             # Save assistant message
             assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
             assistant_message = ChatMessage(
@@ -621,9 +612,7 @@ class ChatController:
             yield f"data: {json_mod.dumps({'error': str(e)})}\n\n"
             return
 
-        # STEP 7: Post-process — strip <think> blocks, then enrich citations
-        import re
-        full_answer = re.sub(r'<think>.*?(?:</think>|$)', '', full_answer, flags=re.DOTALL).strip()
+        # STEP 7: Post-process — enrich citations
         
         sources = await self._build_sources(search_results, category_ids)
         answer, inline_citations = self._enrich_inline_citations(
