@@ -367,10 +367,11 @@ class LLMService:
         tables: Optional[List[Any]] = None,
         retrieved_images: Optional[List[Any]] = None,
         user_uploaded_images: Optional[List[str]] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None,
         max_retrieved_images: int = 3,
         max_user_images: int = 5,
     ) -> str:
-        """Generate response with PROPER multimodal handling."""
+        """Generate response with PROPER multimodal handling and structured chat history."""
         if not self.client:
             raise ValueError("LLM client not initialized")
 
@@ -378,13 +379,21 @@ class LLMService:
             context_chunks, tables, retrieved_images, max_retrieved_images
         )
 
-        user_content: list = [{"type": "text", "text": f"Context:\n{context_text}\n\nQuestion: {query}"}]
+        # Build text content with labeled sections
+        text_parts = [f"Context:\n{context_text}"]
+        if user_uploaded_images:
+            text_parts.append(f"\nThe user has also uploaded {len(user_uploaded_images)} image(s) for analysis (shown below).")
+        text_parts.append(f"\nQuestion: {query}")
+
+        user_content: list = [{"type": "text", "text": "\n".join(text_parts)}]
         self._append_images(user_content, retrieved_images, user_uploaded_images, max_retrieved_images, max_user_images)
 
-        messages = [
-            {"role": "system", "content": _BASE_MULTIMODAL_SYSTEM},
-            {"role": "user", "content": user_content},
-        ]
+        # Build messages with proper chat history
+        messages = [{"role": "system", "content": _BASE_MULTIMODAL_SYSTEM}]
+        if chat_history:
+            for msg in chat_history:
+                messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": user_content})
 
         if retrieved_images or user_uploaded_images:
             try:
@@ -400,7 +409,7 @@ class LLMService:
             except Exception as e:
                 logger.warning(f"Multimodal call failed: {e}. Falling back to text-only.")
 
-        # Fallback: text-only
+        # Fallback: text-only (rebuild messages without image blobs)
         try:
             fallback_parts = [context_text]
             if retrieved_images or user_uploaded_images:
@@ -416,12 +425,18 @@ class LLMService:
                         fallback_parts.append(f"  • {Path(img_path).name}")
             fallback_context = "\n".join(fallback_parts)
 
+            fallback_messages = [{"role": "system", "content": _BASE_RAG_SYSTEM}]
+            if chat_history:
+                for msg in chat_history:
+                    fallback_messages.append({"role": msg["role"], "content": msg["content"]})
+            fallback_messages.append({
+                "role": "user",
+                "content": f"Context:\n{fallback_context}\n\nNote: Images are referenced in the context but could not be rendered.\n\nQuestion: {query}"
+            })
+
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": _BASE_RAG_SYSTEM},
-                    {"role": "user", "content": f"Context:\n{fallback_context}\n\nNote: Images are referenced in the context but could not be rendered.\n\nQuestion: {query}"},
-                ],
+                messages=fallback_messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,
             )
@@ -556,10 +571,11 @@ class LLMService:
         tables: Optional[List[Any]] = None,
         retrieved_images: Optional[List[Any]] = None,
         user_uploaded_images: Optional[List[str]] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None,
         max_retrieved_images: int = 3,
         max_user_images: int = 5,
     ):
-        """Stream a multimodal response token-by-token."""
+        """Stream a multimodal response token-by-token with structured chat history."""
         if not self.client:
             raise ValueError("LLM client not initialized")
 
@@ -567,13 +583,21 @@ class LLMService:
             context_chunks, tables, retrieved_images, max_retrieved_images
         )
 
-        user_content: list = [{"type": "text", "text": f"Context:\n{context_text}\n\nQuestion: {query}"}]
+        # Build text content with labeled sections
+        text_parts = [f"Context:\n{context_text}"]
+        if user_uploaded_images:
+            text_parts.append(f"\nThe user has also uploaded {len(user_uploaded_images)} image(s) for analysis (shown below).")
+        text_parts.append(f"\nQuestion: {query}")
+
+        user_content: list = [{"type": "text", "text": "\n".join(text_parts)}]
         self._append_images(user_content, retrieved_images, user_uploaded_images, max_retrieved_images, max_user_images)
 
-        messages = [
-            {"role": "system", "content": _BASE_MULTIMODAL_SYSTEM},
-            {"role": "user", "content": user_content},
-        ]
+        # Build messages with proper chat history
+        messages = [{"role": "system", "content": _BASE_MULTIMODAL_SYSTEM}]
+        if chat_history:
+            for msg in chat_history:
+                messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": user_content})
 
         if retrieved_images or user_uploaded_images:
             try:
@@ -593,18 +617,24 @@ class LLMService:
             except Exception as e:
                 logger.warning(f"Multimodal stream failed: {e}. Falling back to text-only.")
 
-        # Fallback: text-only stream
+        # Fallback: text-only stream (rebuild messages without image blobs)
         try:
+            fallback_messages = [{"role": "system", "content": _BASE_RAG_SYSTEM}]
+            if chat_history:
+                for msg in chat_history:
+                    fallback_messages.append({"role": msg["role"], "content": msg["content"]})
+            fallback_messages.append({
+                "role": "user",
+                "content": (
+                    f"Context:\n{context_text}\n\n"
+                    "Note: Images are referenced but could not be rendered in this mode.\n\n"
+                    f"Question: {query}"
+                )
+            })
+
             stream = await self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": _BASE_RAG_SYSTEM},
-                    {"role": "user", "content": (
-                        f"Context:\n{context_text}\n\n"
-                        "Note: Images are referenced but could not be rendered in this mode.\n\n"
-                        f"Question: {query}"
-                    )},
-                ],
+                messages=fallback_messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,
                 stream=True,

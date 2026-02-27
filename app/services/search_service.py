@@ -382,7 +382,8 @@ class UnifiedSearchService:
                 from app.services.image_embedder import get_image_embedder
                 embedder = get_image_embedder()
                 embedder.initialize()
-                embedding = embedder.embed_image(query_image_data, text=query_text)
+                # Image-only embedding for visual similarity search
+                embedding = embedder.embed_image(query_image_data)
             elif query_text:
                 from app.services.image_embedder import get_image_embedder
                 embedder = get_image_embedder()

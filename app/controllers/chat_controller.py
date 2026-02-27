@@ -304,19 +304,14 @@ class ChatController:
         # ========================================
         # STEP 4: Build chat history
         # ========================================
-        chat_history = self._build_chat_context(context_messages[:-1])
+        chat_history_msgs = []
+        for msg in context_messages[:-1]:  # Exclude the current user message
+            chat_history_msgs.append({"role": msg.role, "content": msg.content})
         
         # ========================================
         # STEP 5: Generate response
         # ========================================
         try:
-            enhanced_query = (
-                f"Previous conversation:\n{chat_history}\n\n"
-                f"Current question: {message}"
-                if chat_history
-                else message
-            )
-            
             # Convert text_chunks to RetrievedChunk format
             from app.schemas import RetrievedChunk
             
@@ -340,11 +335,12 @@ class ChatController:
                 )
             
             answer = await self.llm.generate_multimodal_response(
-                query=enhanced_query,
+                query=message,
                 context_chunks=retrieved_chunks,
                 tables=tables,
-                retrieved_images=images_from_search,  # Changed: Pass objects
+                retrieved_images=images_from_search,
                 user_uploaded_images=image_paths,
+                chat_history=chat_history_msgs if chat_history_msgs else None,
                 max_retrieved_images=3,
                 max_user_images=5
             )
@@ -566,15 +562,12 @@ class ChatController:
         all_image_paths = all_image_paths[:3]
 
         # STEP 4: Build chat history
-        chat_history = self._build_chat_context(context_messages[:-1])
+        chat_history_msgs = []
+        for msg in context_messages[:-1]:
+            chat_history_msgs.append({"role": msg.role, "content": msg.content})
 
         # STEP 5: Build chunks for LLM
         from app.schemas import RetrievedChunk
-        enhanced_query = (
-            f"Previous conversation:\n{chat_history}\n\n"
-            f"Current question: {message}"
-            if chat_history else message
-        )
 
         doc_filenames = await self._resolve_doc_filenames(text_chunks)
 
@@ -599,11 +592,12 @@ class ChatController:
         full_answer = ""
         try:
             async for token in self.llm.generate_multimodal_response_stream(
-                query=enhanced_query,
+                query=message,
                 context_chunks=retrieved_chunks,
                 tables=tables,
                 retrieved_images=images_from_search if all_image_paths else None,
-                user_uploaded_images=image_paths
+                user_uploaded_images=image_paths,
+                chat_history=chat_history_msgs if chat_history_msgs else None,
             ):
                 full_answer += token
                 yield f"data: {json_mod.dumps({'token': token})}\n\n"
