@@ -1,12 +1,12 @@
 {
   "encoder_name": "multi-qa-MiniLM-L6-cos-v1",
   "threshold": 0.1,
-  "n_positive": 9548,
+  "n_positive": 5722,
   "n_negative": 10000,
   "source_counts": {
-    "chunk": 7725,
-    "image": 1037,
-    "table": 786
+    "chunk": 3940,
+    "image": 1008,
+    "table": 774
   },
   "model_version": "v2_semisupervised"
 }
