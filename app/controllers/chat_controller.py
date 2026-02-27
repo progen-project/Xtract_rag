@@ -120,6 +120,26 @@ class ChatController:
         )
         return (category_ids, all_doc_ids)
     
+    async def _resolve_doc_filenames(self, text_chunks) -> dict:
+        """
+        Build a doc_id → filename mapping from search-result chunks.
+        Used to label context with real filenames instead of "Source N".
+        """
+        doc_ids = set()
+        for r in text_chunks:
+            if r.chunk_id:
+                doc_id = r.chunk_id.split("_chunk_")[0]
+                doc_ids.add(doc_id)
+        mapping = {}
+        for doc_id in doc_ids:
+            try:
+                doc = await self.document_repo.get_by_id(doc_id)
+                if doc:
+                    mapping[doc_id] = doc.filename
+            except Exception:
+                pass
+        return mapping
+    
     async def send_message(
         self,
         message: str,
@@ -201,6 +221,9 @@ class ChatController:
         if not is_relevant:
             logger.info("Message irrelevant to domain. Using direct path.")
             answer = await self.llm.generate_direct_response(message)
+            
+            # Strip <think>...</think> blocks
+            answer = re.sub(r'<think>.*?(?:</think>|$)', '', answer, flags=re.DOTALL).strip()
             
             # Create assistant message (no sources/images for irrelevant queries)
             assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -299,8 +322,11 @@ class ChatController:
             # Convert text_chunks to RetrievedChunk format
             from app.schemas import RetrievedChunk
             
+            doc_filenames = await self._resolve_doc_filenames(text_chunks)
+            
             retrieved_chunks = []
             for result in text_chunks:
+                doc_id = result.chunk_id.split("_chunk_")[0] if result.chunk_id else ""
                 retrieved_chunks.append(
                     RetrievedChunk(
                         chunk_id=result.chunk_id or "",
@@ -309,6 +335,7 @@ class ChatController:
                         section_title=result.section_title,
                         page_start=result.page_number,
                         page_end=result.page_number,
+                        doc_filename=doc_filenames.get(doc_id),
                         images=[],
                         tables=[]
                     )
@@ -325,6 +352,10 @@ class ChatController:
             )
             
             logger.info("Response generated successfully")
+            
+            # Strip <think>...</think> blocks
+            import re
+            answer = re.sub(r'<think>.*?(?:</think>|$)', '', answer, flags=re.DOTALL).strip()
             
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
@@ -491,6 +522,10 @@ class ChatController:
                 full_answer += token
                 yield f"data: {json_mod.dumps({'token': token})}\n\n"
             
+            # Strip <think>...</think> blocks
+            import re
+            full_answer = re.sub(r'<think>.*?(?:</think>|$)', '', full_answer, flags=re.DOTALL).strip()
+            
             # Save assistant message
             assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
             assistant_message = ChatMessage(
@@ -550,8 +585,11 @@ class ChatController:
             if chat_history else message
         )
 
+        doc_filenames = await self._resolve_doc_filenames(text_chunks)
+
         retrieved_chunks = []
         for result in text_chunks:
+            doc_id = result.chunk_id.split("_chunk_")[0] if result.chunk_id else ""
             retrieved_chunks.append(
                 RetrievedChunk(
                     chunk_id=result.chunk_id or "",
@@ -560,6 +598,7 @@ class ChatController:
                     section_title=result.section_title,
                     page_start=result.page_number,
                     page_end=result.page_number,
+                    doc_filename=doc_filenames.get(doc_id),
                     images=[],
                     tables=[]
                 )
@@ -582,7 +621,10 @@ class ChatController:
             yield f"data: {json_mod.dumps({'error': str(e)})}\n\n"
             return
 
-        # STEP 7: Post-process (enrich citations on the full answer)
+        # STEP 7: Post-process — strip <think> blocks, then enrich citations
+        import re
+        full_answer = re.sub(r'<think>.*?(?:</think>|$)', '', full_answer, flags=re.DOTALL).strip()
+        
         sources = await self._build_sources(search_results, category_ids)
         answer, inline_citations = self._enrich_inline_citations(
             full_answer, retrieved_chunks, sources

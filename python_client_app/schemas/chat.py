@@ -62,6 +62,7 @@ class ChatResponse(BaseModel):
     username: str
     message_id: str
     answer: str
+    title: Optional[str] = Field(default=None, description="Auto-generated chat title (only on first response)")
     sources: dict = Field(default_factory=dict, description="Sources map: document_id -> {filename, pages, ...}")
     inline_citations: List[InlineCitation] = Field(default_factory=list, description="Structured inline citations")
     image_results: List[ImageSearchResult] = Field(default_factory=list)

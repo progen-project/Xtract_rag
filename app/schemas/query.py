@@ -26,6 +26,7 @@ class RetrievedChunk(BaseModel):
     section_title: str
     page_start: int
     page_end: int
+    doc_filename: Optional[str] = None
     image_ids: List[str] = Field(default_factory=list)
     images: List[ExtractedImage] = Field(default_factory=list)
     tables: List[ExtractedTable] = Field(default_factory=list)

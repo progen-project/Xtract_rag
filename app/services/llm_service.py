@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 _BASE_RAG_SYSTEM = """\
 You are a highly accurate document-analysis assistant specializing in petroleum engineering documents.
 
+## THINKING (MANDATORY)
+Before writing your final answer, reason step-by-step inside a <think>…</think> block.
+In that block: identify which context chunks are relevant, note key data points, plan the answer structure.
+After </think>, write only the polished answer — the user will only see content AFTER the think block.
+
 ## LANGUAGE RULE (HIGHEST PRIORITY)
 Detect the language of the user's question and **always respond in that exact language**.
 - If the question is in Arabic → answer fully in Arabic.
@@ -54,19 +59,25 @@ Detect the language of the user's question and **always respond in that exact la
 
 ## CITATION RULES (MANDATORY)
 1. Cite EVERY factual claim inline immediately after the claim.
-2. Format: `[Source N, Page X–Y]` — use en-dash, not hyphen.
-3. Multiple sources for one claim: `[Source 1, Page 3–4][Source 2, Page 7]`.
-4. Never group all citations at the end; they must be inline.
-5. Do NOT cite for general knowledge statements (e.g., definitions of basic physics).
+2. Use the **exact document filename** provided in the context label, NOT a generic "Source N".
+3. Format: `[filename.pdf, Page X–Y]` — use en-dash for page ranges.
+4. Multiple sources for one claim: `[report.pdf, Page 3–4][manual.pdf, Page 7]`.
+5. Never group all citations at the end; they must be inline.
+6. Do NOT cite for general knowledge statements (e.g., definitions of basic physics).
 
 ## EXAMPLE OUTPUT
-"The wellbore pressure was recorded at 3,450 psi during the test period [Source 1, Page 12–13]. \
-Casing integrity was confirmed via a pressure build-up analysis [Source 2, Page 7]."
+"The wellbore pressure was recorded at 3,450 psi during the test period [Well_Test_Report.pdf, Page 12–13]. \
+Casing integrity was confirmed via a pressure build-up analysis [Completion_Manual.pdf, Page 7]."
 """
 
 _BASE_MULTIMODAL_SYSTEM = """\
 You are a highly accurate document-analysis assistant specializing in petroleum engineering documents.
 You can read text, tables, and images (diagrams, charts, photos, schematics).
+
+## THINKING (MANDATORY)
+Before writing your final answer, reason step-by-step inside a <think>…</think> block.
+In that block: identify relevant chunks, images, and tables; note key data; plan the answer.
+After </think>, write only the polished answer.
 
 ## LANGUAGE RULE (HIGHEST PRIORITY)
 Detect the language of the user's question and **always respond in that exact language**.
@@ -99,14 +110,15 @@ Detect the language of the user's question and **always respond in that exact la
 - Paragraphs ≤ 3 sentences. No filler phrases.
 
 ## CITATION RULES (MANDATORY)
-1. Cite every factual claim inline: `[Source N, Page X–Y]`.
-2. Image-based claims: `[Image N, Page X]`.
-3. Multiple sources: `[Source 1, Page 3–4][Source 2, Page 7]`.
-4. Citations must be inline, not grouped at the end.
-5. No citation needed for basic definitional statements.
+1. Cite every factual claim inline using the **exact document filename** from the context label.
+2. Format: `[filename.pdf, Page X–Y]` — use en-dash for page ranges.
+3. Image-based claims: `[Image N, Page X]`.
+4. Multiple sources: `[report.pdf, Page 3–4][manual.pdf, Page 7]`.
+5. Citations must be inline, not grouped at the end.
+6. No citation needed for basic definitional statements.
 
 ## EXAMPLE OUTPUT
-"The separator efficiency reached 94.3% under test conditions [Source 1, Page 5–6]. \
+"The separator efficiency reached 94.3% under test conditions [Production_Report.pdf, Page 5–6]. \
 The P&ID diagram confirms the bypass valve location upstream of the separator [Image 2, Page 8]."
 """
 
@@ -187,8 +199,9 @@ class LLMService:
             image_note = ""
             if hasattr(chunk, "image_ids") and chunk.image_ids:
                 image_note = f" [Contains {len(chunk.image_ids)} image(s)]"
+            label = chunk.doc_filename or f"Source {i}"
             parts.append(
-                f"[Source {i} - {chunk.section_title} "
+                f"[{label} - {chunk.section_title} "
                 f"(Pages {chunk.page_start}–{chunk.page_end}){image_note}]\n"
                 f"{chunk.content}\n"
             )
@@ -211,8 +224,9 @@ class LLMService:
             image_mention = ""
             if hasattr(chunk, "image_ids") and chunk.image_ids:
                 image_mention = f" [Contains {len(chunk.image_ids)} image(s)]"
+            label = chunk.doc_filename or f"Source {i}"
             parts.append(
-                f"[Source {i} - {chunk.section_title} "
+                f"[{label} - {chunk.section_title} "
                 f"(Pages {chunk.page_start}–{chunk.page_end}){image_mention}]\n"
                 f"{chunk.content}\n"
             )
