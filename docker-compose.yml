@@ -23,6 +23,7 @@ services:
       - ./active_docs:/app/active_docs
       - ./extracted_images:/app/extracted_images
       - ./chat_images:/app/chat_images
+      - ./logs:/app/logs
     networks:
       - petrorag_network
     restart: unless-stopped

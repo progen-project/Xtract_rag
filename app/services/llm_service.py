@@ -28,6 +28,11 @@ Before writing your final answer, reason step-by-step inside a <think>…</think
 In that block: identify which context chunks are relevant, note key data points, plan the answer structure.
 After </think>, write only the polished answer — the user will only see content AFTER the think block.
 
+## CONTEXT FORMAT (JSON)
+The provided context is a structured JSON array containing text chunks, tables, and image descriptions.
+Each element contains a `source_file`, `page`, `section_title`, and the core `content`.
+When citing, you must strictly use the `source_file` and `page` attributes from the specific JSON object where you found the information.
+
 ## LANGUAGE RULE (HIGHEST PRIORITY)
 Detect the language of the user's question and **always respond in that exact language**.
 - If the question is in Arabic → answer fully in Arabic.
@@ -39,7 +44,7 @@ Detect the language of the user's question and **always respond in that exact la
 - Answer ONLY from the provided context chunks.
 - If the question is **completely unrelated** to petroleum engineering or the document content (e.g., cooking, sports, general trivia), politely decline and explain that you are scoped to document-based petroleum engineering queries.
 - If the context exists but does **not contain enough information** to answer confidently, clearly say so and indicate which aspect is missing — do NOT fabricate data.
-- If **no context chunks** are provided at all, explicitly state: "No relevant information was found in the selected documents."
+- If **no context chunks** are provided at all (empty JSON array), explicitly state: "No relevant information was found in the selected documents."
 - If the question is **ambiguous**, address the most likely intended interpretation and note the assumption made.
 
 ## CONFIDENCE SIGNALS
@@ -59,7 +64,7 @@ Detect the language of the user's question and **always respond in that exact la
 
 ## CITATION RULES (MANDATORY)
 1. Cite EVERY factual claim inline immediately after the claim.
-2. Use the **exact document filename** provided in the context label, NOT a generic "Source N".
+2. Use the **exact document filename** provided in the `source_file` key of the JSON object, NOT a generic "Source N".
 3. Format: `[filename.pdf, Page X–Y]` — use en-dash for page ranges.
 4. Multiple sources for one claim: `[report.pdf, Page 3–4][manual.pdf, Page 7]`.
 5. Never group all citations at the end; they must be inline.
@@ -79,6 +84,11 @@ Before writing your final answer, reason step-by-step inside a <think>…</think
 In that block: identify relevant chunks, images, and tables; note key data; plan the answer.
 After </think>, write only the polished answer.
 
+## CONTEXT FORMAT (JSON)
+The provided context is a structured JSON array containing text chunks, tables, and image descriptions.
+Each element contains a `source_file`, `page`, `section_title`, and the core `content` (or `analysis` for images).
+When citing, you must strictly use the `source_file` and `page` attributes from the specific JSON object where you found the information.
+
 ## LANGUAGE RULE (HIGHEST PRIORITY)
 Detect the language of the user's question and **always respond in that exact language**.
 - If the question is in Arabic → answer fully in Arabic.
@@ -86,7 +96,7 @@ Detect the language of the user's question and **always respond in that exact la
 - Document content or image labels may differ in language; still respond in the question's language.
 
 ## SCOPE & RELEVANCE
-- Answer ONLY from the provided context (text chunks, tables, and images).
+- Answer ONLY from the provided JSON context (text chunks, tables, and images).
 - If the question is completely unrelated to the documents or petroleum engineering, politely decline.
 - If context is insufficient, clearly state what is missing — never fabricate.
 - If no context is provided, state: "No relevant information was found in the selected documents."
@@ -97,7 +107,7 @@ Detect the language of the user's question and **always respond in that exact la
 - Do not present visual interpretations as confirmed facts.
 
 ## IMAGE HANDLING
-- Examine every provided image carefully before answering.
+- Examine every provided image object in the JSON carefully before answering.
 - Reference images with `[Image N, Page X]` immediately after any image-based claim.
 - If an image is unclear or irrelevant to the question, note that briefly and continue.
 - Combine textual and visual evidence for the most complete answer.
@@ -110,7 +120,7 @@ Detect the language of the user's question and **always respond in that exact la
 - Paragraphs ≤ 3 sentences. No filler phrases.
 
 ## CITATION RULES (MANDATORY)
-1. Cite every factual claim inline using the **exact document filename** from the context label.
+1. Cite every factual claim inline using the **exact document filename** from the `source_file` key.
 2. Format: `[filename.pdf, Page X–Y]` — use en-dash for page ranges.
 3. Image-based claims: `[Image N, Page X]`.
 4. Multiple sources: `[report.pdf, Page 3–4][manual.pdf, Page 7]`.
@@ -194,18 +204,28 @@ class LLMService:
     # ----------------------------------------------------------
     @staticmethod
     def _build_context(context_chunks: List[RetrievedChunk]) -> str:
-        parts = []
+        """Builds a JSON string representing the textual context."""
+        import json
+        
+        if not context_chunks:
+            return json.dumps({"context": []})
+            
+        context_data = []
         for i, chunk in enumerate(context_chunks, 1):
             image_note = ""
             if hasattr(chunk, "image_ids") and chunk.image_ids:
                 image_note = f" [Contains {len(chunk.image_ids)} image(s)]"
-            label = chunk.doc_filename or f"Source {i}"
-            parts.append(
-                f"[{label} - {chunk.section_title} "
-                f"(Pages {chunk.page_start}–{chunk.page_end}){image_note}]\n"
-                f"{chunk.content}\n"
-            )
-        return "\n".join(parts) if parts else "[NO CONTEXT AVAILABLE]"
+                
+            context_data.append({
+                "type": "text",
+                "source_file": chunk.doc_filename or f"Source {i}",
+                "section_title": chunk.section_title or "",
+                "pages": f"{chunk.page_start}–{chunk.page_end}",
+                "content": chunk.content,
+                "note": image_note.strip() if image_note else None
+            })
+            
+        return json.dumps({"context": context_data}, ensure_ascii=False, indent=2)
 
     # ----------------------------------------------------------
     # HELPER: build multimodal context (text + tables + images meta)
@@ -217,54 +237,77 @@ class LLMService:
         retrieved_images: Optional[List[Any]],
         max_retrieved_images: int,
     ) -> str:
-        parts = []
+        """Builds a JSON string representing the multimodal context."""
+        import json
+        
+        context_data = {
+            "context": [],
+            "tables": [],
+            "images": []
+        }
 
         # Text chunks
         for i, chunk in enumerate(context_chunks, 1):
-            image_mention = ""
+            image_note = ""
             if hasattr(chunk, "image_ids") and chunk.image_ids:
-                image_mention = f" [Contains {len(chunk.image_ids)} image(s)]"
-            label = chunk.doc_filename or f"Source {i}"
-            parts.append(
-                f"[{label} - {chunk.section_title} "
-                f"(Pages {chunk.page_start}–{chunk.page_end}){image_mention}]\n"
-                f"{chunk.content}\n"
-            )
-
-        if not parts:
-            parts.append("[NO TEXT CONTEXT AVAILABLE]")
+                image_note = f" [Contains {len(chunk.image_ids)} image(s)]"
+                
+            context_data["context"].append({
+                "type": "text",
+                "source_file": chunk.doc_filename or f"Source {i}",
+                "section_title": chunk.section_title or "",
+                "pages": f"{chunk.page_start}–{chunk.page_end}",
+                "content": chunk.content,
+                "note": image_note.strip() if image_note else None
+            })
 
         # Tables
         if tables:
-            parts.append("\n=== RELEVANT TABLES ===\n")
             for i, table in enumerate(tables, 1):
                 if hasattr(table, "markdown_content"):
-                    content, page, title = table.markdown_content, table.page_number, table.section_title
+                    content = table.markdown_content
+                    page = table.page_number
+                    title = table.section_title
+                    doc_filename = getattr(table, "doc_filename", f"Table {i}")
                 else:
                     content = table.get("markdown", "") or str(table)
                     page = table.get("page_number", "?")
                     title = table.get("section_title", "")
-                parts.append(f"[Table {i} – Section: {title} (Page {page})]\n{content}\n")
+                    doc_filename = table.get("doc_filename", f"Table {i}")
+                    
+                context_data["tables"].append({
+                    "source_file": doc_filename,
+                    "section_title": title,
+                    "page": page,
+                    "content": content
+                })
 
         # Image analysis summaries
         if retrieved_images:
-            parts.append("\n=== RETRIEVED IMAGE ANALYSES ===\n")
             for i, img in enumerate(retrieved_images[:max_retrieved_images], 1):
                 analysis = getattr(img, "analysis", "")
                 caption = getattr(img, "caption", "") or ""
                 title = getattr(img, "section_title", "") or "Unknown section"
                 page = getattr(img, "page_number", "?")
+                doc_filename = getattr(img, "doc_filename", Path(getattr(img, "image_path", "")).name)
 
-                info = [f"Image {i}: {Path(img.image_path).name} (Page {page}, Section: {title})"]
+                img_data = {
+                    "source_file": doc_filename,
+                    "section_title": title,
+                    "page": page,
+                    "image_name": Path(getattr(img, "image_path", f"Image_{i}")).name
+                }
+                
                 if caption:
-                    info.append(f"Caption: {caption}")
+                    img_data["caption"] = caption
                 if analysis:
-                    info.append(f"Analysis: {analysis}")
+                    img_data["analysis"] = analysis
                 elif not caption:
-                    info.append("Note: No textual analysis available — refer to the visual below.")
-                parts.append("\n".join(info) + "\n")
+                    img_data["note"] = "No textual analysis available — refer to the visual below."
+                    
+                context_data["images"].append(img_data)
 
-        return "\n".join(parts)
+        return json.dumps(context_data, ensure_ascii=False, indent=2)
 
     # ----------------------------------------------------------
     # HELPER: Log exact LLM requests and inputs
