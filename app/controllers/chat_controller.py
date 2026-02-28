@@ -613,13 +613,9 @@ class ChatController:
             full_answer, retrieved_chunks, sources
         )
         
-        # Intelligent Source Attachment: Filter sources to only those cited by the LLM
-        if inline_citations:
-            cited_doc_ids = {c["document_id"] for c in inline_citations}
-            sources = {doc_id: data for doc_id, data in sources.items() if doc_id in cited_doc_ids}
-            logger.info(f"Filtered sources to {len(sources)} cited documents.")
-        else:
-            logger.info(f"No inline citations found. Keeping all {len(sources)} sources.")
+        # Intelligent Source Attachment: Removed per user request. 
+        # All searched sources will be returned regardless of whether the LLM cited them or not.
+        logger.info(f"Retaining all {len(sources)} sources without filtering.")
 
         # STEP 8: Save assistant message
         assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"

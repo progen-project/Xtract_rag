@@ -267,6 +267,51 @@ class LLMService:
         return "\n".join(parts)
 
     # ----------------------------------------------------------
+    # HELPER: Log exact LLM requests and inputs
+    # ----------------------------------------------------------
+    def _log_llm_request(self, messages: List[Dict[str, Any]]) -> None:
+        """Write the exact LLM input payload to a dedicated log file."""
+        import json
+        import os
+        from datetime import datetime
+        
+        log_dir = self.settings.log_dir if hasattr(self.settings, 'log_dir') else "./logs"
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, "llm_inputs.log")
+        
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"\n{'='*50}\n")
+                f.write(f"TIMESTAMP: {datetime.utcnow().isoformat()}\n")
+                f.write(f"MODEL: {self.model}\n")
+                f.write(f"{'-'*50}\n")
+                
+                # We do a deepcopy or manual extraction to avoid dumping giant base64 image strings into the log
+                log_messages = []
+                for msg in messages:
+                    if isinstance(msg.get("content"), list):
+                        # This is a multimodal message
+                        safe_content = []
+                        for part in msg["content"]:
+                            if part.get("type") == "text":
+                                safe_content.append(part)
+                            elif part.get("type") == "image_url":
+                                url_data = part.get("image_url", {}).get("url", "")
+                                if url_data.startswith("data:image"):
+                                    safe_content.append({"type": "image_url", "image_url": {"url": "<BASE64_IMAGE_DATA>"}})
+                                else:
+                                    safe_content.append(part)
+                        log_messages.append({"role": msg.get("role"), "content": safe_content})
+                    else:
+                        # Standard text message
+                        log_messages.append({"role": msg.get("role"), "content": msg.get("content")})
+                
+                f.write(json.dumps(log_messages, indent=2, ensure_ascii=False))
+                f.write(f"\n{'='*50}\n")
+        except Exception as e:
+            logger.error(f"Failed to log LLM request: {e}")
+
+    # ----------------------------------------------------------
     # HELPER: append image blobs to user_content list
     # ----------------------------------------------------------
     def _append_images(
@@ -322,6 +367,9 @@ class LLMService:
             {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"},
         ]
 
+        # --- Logging the exact input sent to LLM ---
+        self._log_llm_request(messages)
+
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
@@ -347,6 +395,9 @@ class LLMService:
             {"role": "system", "content": system_prompt or _DIRECT_RESPONSE_SYSTEM},
             {"role": "user", "content": query},
         ]
+
+        # --- Logging the exact input sent to LLM ---
+        self._log_llm_request(messages)
 
         try:
             response = await self.client.chat.completions.create(
@@ -394,6 +445,9 @@ class LLMService:
             for msg in chat_history:
                 messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": user_content})
+
+        # --- Logging the exact input sent to LLM ---
+        self._log_llm_request(messages)
 
         if retrieved_images or user_uploaded_images:
             try:
@@ -599,6 +653,9 @@ class LLMService:
                 messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": user_content})
 
+        # --- Logging the exact input sent to LLM ---
+        self._log_llm_request(messages)
+
         if retrieved_images or user_uploaded_images:
             try:
                 logger.info(f"Streaming multimodal response: {self.model}")
@@ -631,6 +688,9 @@ class LLMService:
                     f"Question: {query}"
                 )
             })
+
+            # --- Logging the exact input sent to LLM ---
+            self._log_llm_request(fallback_messages)
 
             stream = await self.client.chat.completions.create(
                 model=self.model,

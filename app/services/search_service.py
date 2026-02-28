@@ -440,3 +440,10 @@ class UnifiedSearchService:
         except Exception as e:
             logger.error(f"Image search failed: {e}")
             return []
+
+search_service = UnifiedSearchService(indexer, embed_model)
+
+def get_search_service() -> UnifiedSearchService:
+    """Dependency for search service."""
+    return search_service
+
