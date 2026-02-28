@@ -9,6 +9,7 @@ from qdrant_client.models import SparseVector
 from fastembed import SparseTextEmbedding
 
 from app.services.rerank_service import get_rerank_service
+from app.services.indexer import get_indexer
 from app.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -441,7 +442,8 @@ class UnifiedSearchService:
             logger.error(f"Image search failed: {e}")
             return []
 
-search_service = UnifiedSearchService(indexer, embed_model)
+indexer = get_indexer()
+search_service = UnifiedSearchService(indexer, indexer.embed_model)
 
 def get_search_service() -> UnifiedSearchService:
     """Dependency for search service."""
