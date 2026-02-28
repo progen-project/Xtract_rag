@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 class QueryController:
     """Controller for query operations."""
     
-    def __init__(self, indexer, llm_service, document_repo, guard=None):
-        self.indexer = indexer
+    def __init__(self, search_service, llm_service, document_repo, guard=None):
+        self.search_service = search_service
         self.llm = llm_service
         self.document_repo = document_repo
         self.guard = guard
@@ -30,7 +30,7 @@ class QueryController:
     async def query(self, request: QueryRequest) -> QueryResponse:
         """Perform a RAG query."""
         # Initialize services
-        self.indexer.initialize()
+        self.search_service.indexer.initialize()
         self.llm.initialize()
         
         # ========================================
@@ -53,12 +53,41 @@ class QueryController:
             )
 
         # Retrieve relevant chunks
-        retrieved_chunks = self.indexer.query(
+        from app.config.settings import get_settings
+        settings = get_settings()
+        
+        # Build filters for search service
+        filters = {}
+        if request.document_ids:
+            filters["document_ids"] = request.document_ids
+        if request.category_ids:
+            filters["category_ids"] = request.category_ids
+            
+        search_results = self.search_service.search(
             query_text=request.query,
             top_k=request.top_k,
-            document_ids=request.document_ids,
-            category_ids=request.category_ids
+            filters=filters,
+            search_text=True,
+            search_tables=False,  # Query endpoint didn't originally support table chunks
+            search_images=False   # Query endpoint didn't originally support image chunks
         )
+        
+        # Convert SearchResult back to RetrievedChunk to maintain backward compatibility
+        retrieved_chunks = []
+        for res in search_results:
+            # We map SearchResult back to RetrievedChunk expected by /api/query
+            # Using section_title for the content context handling
+            retrieved_chunk = RetrievedChunk(
+                chunk_id=f"{res.document_id}_chunk_{res.id}", # Approximation to match old logic
+                content=res.content,
+                score=res.score,
+                section_title=res.section_title or "",
+                page_start=res.page_number,
+                page_end=res.page_number,
+                images=[],
+                tables=[]
+            )
+            retrieved_chunks.append(retrieved_chunk)
         
         if not retrieved_chunks:
             return QueryResponse(
@@ -195,11 +224,11 @@ class QueryController:
                 "At least one of 'query_text' or 'query_image_base64' must be provided"
             )
         
-        self.indexer.initialize()
+        self.search_service.indexer.initialize()
         
         results = []
         if request.query_image_base64:
-            results = self.indexer.search_images_by_image(
+            results = self.search_service.indexer.search_images_by_image(
                 image_data=request.query_image_base64,
                 text=request.query_text,
                 top_k=request.top_k,
@@ -207,7 +236,7 @@ class QueryController:
                 category_ids=request.category_ids
             )
         elif request.query_text:
-            results = self.indexer.search_images_by_text(
+            results = self.search_service.indexer.search_images_by_text(
                 query_text=request.query_text,
                 top_k=request.top_k,
                 document_ids=request.document_ids,

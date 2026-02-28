@@ -25,6 +25,7 @@ from app.services.chunker import SectionChunker
 from app.services.image_embedder import image_embedder
 from app.services.rerank_service import rerank_service
 from app.services.llm_guard import Guard
+from app.services.search_service import get_search_service
 
 
 from app.services.status import ProcessingStatusManager  # Added
@@ -61,7 +62,7 @@ class Container:
         self.rerank_service = rerank_service
         self.status_manager = ProcessingStatusManager()  # Added status manager
         self.guard: Optional[Guard] = None
-    
+        self.search_service = get_search_service()
     async def initialize(self) -> None:
         """Initialize all components (called at startup)."""
         logger.info("Initializing dependency container...")
@@ -108,7 +109,7 @@ class Container:
         )
         
         self.query_controller = QueryController(
-            indexer=self.indexer,
+            search_service=self.search_service,
             llm_service=self.llm,
             document_repo=self.document_repo,
             guard=self.guard
