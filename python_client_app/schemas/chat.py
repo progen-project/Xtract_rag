@@ -9,7 +9,7 @@ from datetime import datetime
 
 class InlineCitation(BaseModel):
     """A structured inline citation linking answer parts to specific sources."""
-    source_number: int = Field(..., description="Source index (1-based)")
+    source_number: Optional[int] = Field(default=None, description="Source index (1-based), if available")
     document_id: str = Field(..., description="Document ID")
     filename: str = Field(..., description="Document filename")
     section_title: str = Field("", description="Section title")

@@ -10,7 +10,7 @@ from .query import ImageSearchResult
 
 class InlineCitation(BaseModel):
     """A structured inline citation linking a part of the answer to a specific source."""
-    source_number: int = Field(..., description="Source index (1-based) in the context chunks")
+    source_number: Optional[int] = Field(default=None, description="Source index (1-based), if available")
     document_id: str = Field(..., description="Document ID")
     filename: str = Field(..., description="Document filename")
     section_title: str = Field("", description="Section title")
