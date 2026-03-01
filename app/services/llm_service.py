@@ -581,7 +581,9 @@ class LLMService:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.2,
-                max_tokens=512
+                max_tokens=512,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}}  # Qwen3 specific
+
             )
             raw_title = response.choices[0].message.content
             
