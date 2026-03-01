@@ -564,9 +564,12 @@ class LLMService:
             "- Ignore the `<think>` process, just output the final title.\n"
             "- Do not explain your reasoning."
         )
-
+        assistant_reply = ""
+        if first_assistant_reply:
+            assistant_reply = f"\nAssistant: {first_assistant_reply}"
         prompt = (
             f"User: {first_user_message}\n"
+            f"Assistant: {assistant_reply}\n"
             f"Generate a concise 3-5 word title for this topic:"
         )
 
