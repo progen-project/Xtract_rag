@@ -624,9 +624,10 @@ class LLMService:
                 stream=True,
             )
             async for chunk in stream:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    yield delta.content
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
         except Exception as e:
             logger.error(f"Error streaming response: {e}")
             raise
@@ -654,9 +655,10 @@ class LLMService:
                 stream=True,
             )
             async for chunk in stream:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    yield delta.content
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
         except Exception as e:
             logger.error(f"Error in direct streaming: {e}")
             raise
@@ -710,9 +712,10 @@ class LLMService:
                     stream=True,
                 )
                 async for chunk in stream:
-                    delta = chunk.choices[0].delta
-                    if delta.content:
-                        yield delta.content
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta
+                        if delta.content:
+                            yield delta.content
                 return  # Vision succeeded
             except Exception as e:
                 logger.warning(f"Multimodal stream failed: {e}. Falling back to text-only.")
@@ -743,9 +746,10 @@ class LLMService:
                 stream=True,
             )
             async for chunk in stream:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    yield delta.content
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
         except Exception as e:
             logger.error(f"Fallback stream also failed: {e}")
             raise
