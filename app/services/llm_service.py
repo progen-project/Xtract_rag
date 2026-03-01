@@ -175,6 +175,51 @@ Otherwise, respond in English by default.
 - Be concise but thorough — downstream RAG will use this analysis for retrieval.
 """
 
+# Add this new system prompt near the other templates
+
+_USER_IMAGE_ANALYSIS_SYSTEM = """\
+You are a highly accurate document-analysis assistant specializing in petroleum engineering documents.
+You can read text, tables, and images (diagrams, charts, photos, schematics).
+
+## PRIMARY TASK
+The user has uploaded one or more images for direct analysis. These uploaded images are YOUR MAIN SUBJECT.
+Analyze each uploaded image in detail. The retrieved document context is SUPPLEMENTARY REFERENCE ONLY —
+use it to enrich your analysis if relevant, but do NOT let it dominate or replace direct image analysis.
+
+## THINKING (MANDATORY)
+Before writing your final answer, reason step-by-step inside a <think>…</think> block.
+In that block: examine each uploaded image carefully, identify what it shows, then check if retrieved context adds useful info.
+After </think>, write only the polished answer.
+
+## ANALYSIS STRUCTURE (for each uploaded image)
+For EACH uploaded image, provide:
+1. **Image Type** — What kind of diagram/chart/photo/schematic is this?
+2. **Key Components** — List all significant visible elements, labels, annotations.
+3. **Data & Values** — Extract any numeric values, units, thresholds, or dates visible.
+4. **Technical Interpretation** — What does this communicate in petroleum engineering context?
+5. **Supporting Context** — Only if retrieved documents contain directly relevant info, cite it briefly.
+
+## LANGUAGE RULE (HIGHEST PRIORITY)
+Always respond in the **same language as the user's question**.
+
+## SCOPE
+- If an uploaded image is unclear or ambiguous, state that explicitly per image.
+- If retrieved context has NO relevant info for a particular image, explicitly state:
+  "No supporting context was found in the selected documents for this image."
+- Never fabricate details not visible in the image.
+- Never substitute retrieved image analyses for direct analysis of the uploaded images.
+
+## FORMATTING RULES
+- Number each uploaded image section: `## Image 1: [Inferred Title]`, `## Image 2: …`, etc.
+- **Bold** key components and values.
+- Bullet points for component lists.
+- Paragraphs ≤ 3 sentences. No filler phrases.
+
+## CITATION RULES
+- Direct image observations: `[Uploaded Image N]`
+- Retrieved document references: `[filename.pdf, Page X–Y]`
+- Never cite a retrieved document as the source of something you observed directly in the uploaded image.
+"""
 
 class LLMService:
     """
@@ -465,34 +510,75 @@ class LLMService:
         max_retrieved_images: int = 3,
         max_user_images: int = 5,
     ) -> str:
-        """Generate response with PROPER multimodal handling and structured chat history."""
         if not self.client:
             raise ValueError("LLM client not initialized")
 
+        has_user_images = bool(user_uploaded_images)
+        
         context_text = self._build_multimodal_context(
             context_chunks, tables, retrieved_images, max_retrieved_images
         )
 
-        # Build text content with labeled sections
-        text_parts = [f"Context:\n{context_text}"]
-        if user_uploaded_images:
-            text_parts.append(f"\nThe user has also uploaded {len(user_uploaded_images)} image(s) for analysis (shown below).")
-        text_parts.append(f"\nQuestion: {query}")
+        # --- KEY CHANGE: Split prompt structure based on whether user uploaded images ---
+        if has_user_images:
+            system_prompt = _USER_IMAGE_ANALYSIS_SYSTEM
+            text_parts = [
+                f"## Uploaded Images for Analysis\n"
+                f"The user has uploaded {len(user_uploaded_images)} image(s). "
+                f"These are shown below and are the PRIMARY subject of the question.\n",
+                f"## Reference Context (Supplementary)\n{context_text}\n",
+                f"## User Question\n{query}"
+            ]
+        else:
+            system_prompt = _BASE_MULTIMODAL_SYSTEM
+            text_parts = [
+                f"Context:\n{context_text}\n",
+                f"Question: {query}"
+            ]
 
         user_content: list = [{"type": "text", "text": "\n".join(text_parts)}]
-        self._append_images(user_content, retrieved_images, user_uploaded_images, max_retrieved_images, max_user_images)
 
-        # Build messages with proper chat history
-        messages = [{"role": "system", "content": _BASE_MULTIMODAL_SYSTEM}]
+        # --- KEY CHANGE: Uploaded images go FIRST, retrieved images go AFTER ---
+        if has_user_images:
+            for img_path in user_uploaded_images[:max_user_images]:
+                try:
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}"},
+                    })
+                except Exception as e:
+                    logger.warning(f"Could not load user image {img_path}: {e}")
+
+            # Retrieved images added AFTER with a separator label
+            if retrieved_images:
+                user_content.append({
+                    "type": "text",
+                    "text": "\n--- Reference images from documents (supplementary context) ---\n"
+                })
+                for img_obj in retrieved_images[:max_retrieved_images]:
+                    img_path = getattr(img_obj, "image_path", "")
+                    if not img_path:
+                        continue
+                    try:
+                        user_content.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}"},
+                        })
+                    except Exception as e:
+                        logger.warning(f"Could not load retrieved image {img_path}: {e}")
+        else:
+            # Original behavior when no user images
+            self._append_images(user_content, retrieved_images, None, max_retrieved_images, max_user_images)
+
+        messages = [{"role": "system", "content": system_prompt}]
         if chat_history:
             for msg in chat_history:
                 messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": user_content})
 
-        # --- Logging the exact input sent to LLM ---
         self._log_llm_request(messages)
 
-        if retrieved_images or user_uploaded_images:
+        if retrieved_images or has_user_images:
             try:
                 logger.info(f"Calling model with vision input: {self.model}")
                 response = await self.client.chat.completions.create(
@@ -506,31 +592,16 @@ class LLMService:
             except Exception as e:
                 logger.warning(f"Multimodal call failed: {e}. Falling back to text-only.")
 
-        # Fallback: text-only (rebuild messages without image blobs)
+        # Fallback unchanged...
         try:
-            fallback_parts = [context_text]
-            if retrieved_images or user_uploaded_images:
-                fallback_parts.append("\n\n=== IMAGES (not renderable in fallback mode) ===")
-                if retrieved_images:
-                    fallback_parts.append("Document images referenced:")
-                    for img in retrieved_images[:max_retrieved_images]:
-                        path = getattr(img, "image_path", "unknown")
-                        fallback_parts.append(f"  • {Path(path).name}")
-                if user_uploaded_images:
-                    fallback_parts.append("User-uploaded images:")
-                    for img_path in user_uploaded_images[:max_user_images]:
-                        fallback_parts.append(f"  • {Path(img_path).name}")
-            fallback_context = "\n".join(fallback_parts)
-
             fallback_messages = [{"role": "system", "content": _BASE_RAG_SYSTEM}]
             if chat_history:
                 for msg in chat_history:
                     fallback_messages.append({"role": msg["role"], "content": msg["content"]})
             fallback_messages.append({
                 "role": "user",
-                "content": f"Context:\n{fallback_context}\n\nNote: Images are referenced in the context but could not be rendered.\n\nQuestion: {query}"
+                "content": f"Context:\n{context_text}\n\nNote: Images could not be rendered.\n\nQuestion: {query}"
             })
-
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=fallback_messages,
@@ -541,7 +612,6 @@ class LLMService:
         except Exception as fallback_error:
             logger.error(f"Fallback also failed: {fallback_error}")
             raise
-
     # ==========================================================
     # STREAMING METHODS
     # ==========================================================
@@ -683,30 +753,71 @@ class LLMService:
         if not self.client:
             raise ValueError("LLM client not initialized")
 
+        has_user_images = bool(user_uploaded_images)
+
         context_text = self._build_multimodal_context(
             context_chunks, tables, retrieved_images, max_retrieved_images
         )
 
-        # Build text content with labeled sections
-        text_parts = [f"Context:\n{context_text}"]
-        if user_uploaded_images:
-            text_parts.append(f"\nThe user has also uploaded {len(user_uploaded_images)} image(s) for analysis (shown below).")
-        text_parts.append(f"\nQuestion: {query}")
+        # --- Switch prompt + structure based on whether user uploaded images ---
+        if has_user_images:
+            system_prompt = _USER_IMAGE_ANALYSIS_SYSTEM
+            text_parts = [
+                f"## Uploaded Images for Analysis\n"
+                f"The user has uploaded {len(user_uploaded_images)} image(s). "
+                f"These are shown below and are the PRIMARY subject of the question.\n",
+                f"## Reference Context (Supplementary)\n{context_text}\n",
+                f"## User Question\n{query}"
+            ]
+        else:
+            system_prompt = _BASE_MULTIMODAL_SYSTEM
+            text_parts = [
+                f"Context:\n{context_text}\n",
+                f"Question: {query}"
+            ]
 
         user_content: list = [{"type": "text", "text": "\n".join(text_parts)}]
-        self._append_images(user_content, retrieved_images, user_uploaded_images, max_retrieved_images, max_user_images)
 
-        # Build messages with proper chat history
-        messages = [{"role": "system", "content": _BASE_MULTIMODAL_SYSTEM}]
+        # --- Uploaded images FIRST, retrieved images AFTER with separator ---
+        if has_user_images:
+            for img_path in user_uploaded_images[:max_user_images]:
+                try:
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}"},
+                    })
+                except Exception as e:
+                    logger.warning(f"Could not load user image {img_path}: {e}")
+
+            if retrieved_images:
+                user_content.append({
+                    "type": "text",
+                    "text": "\n--- Reference images from documents (supplementary context) ---\n"
+                })
+                for img_obj in retrieved_images[:max_retrieved_images]:
+                    img_path = getattr(img_obj, "image_path", "")
+                    if not img_path:
+                        continue
+                    try:
+                        user_content.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{self._resize_image(img_path)}"},
+                        })
+                    except Exception as e:
+                        logger.warning(f"Could not load retrieved image {img_path}: {e}")
+        else:
+            # Original behavior — no user images, only retrieved
+            self._append_images(user_content, retrieved_images, None, max_retrieved_images, max_user_images)
+
+        messages = [{"role": "system", "content": system_prompt}]
         if chat_history:
             for msg in chat_history:
                 messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": user_content})
 
-        # --- Logging the exact input sent to LLM ---
         self._log_llm_request(messages)
 
-        if retrieved_images or user_uploaded_images:
+        if retrieved_images or has_user_images:
             try:
                 logger.info(f"Streaming multimodal response: {self.model}")
                 stream = await self.client.chat.completions.create(
@@ -725,7 +836,7 @@ class LLMService:
             except Exception as e:
                 logger.warning(f"Multimodal stream failed: {e}. Falling back to text-only.")
 
-        # Fallback: text-only stream (rebuild messages without image blobs)
+        # Fallback: text-only stream
         try:
             fallback_messages = [{"role": "system", "content": _BASE_RAG_SYSTEM}]
             if chat_history:
@@ -740,7 +851,6 @@ class LLMService:
                 )
             })
 
-            # --- Logging the exact input sent to LLM ---
             self._log_llm_request(fallback_messages)
 
             stream = await self.client.chat.completions.create(
@@ -758,7 +868,6 @@ class LLMService:
         except Exception as e:
             logger.error(f"Fallback stream also failed: {e}")
             raise
-
     # ==========================================================
     # IMAGE UTILITIES
     # ==========================================================
