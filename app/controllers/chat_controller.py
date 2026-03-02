@@ -350,7 +350,7 @@ class ChatController:
             
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
-            answer = "I apologize, but I couldn't generate a response. Please try again."
+            answer = "Sorry, the AI service is currently unavailable or experiencing high traffic. Please try again later."
         
         # ========================================
         # STEP 6: Build sources metadata
@@ -603,8 +603,9 @@ class ChatController:
                 yield f"data: {json_mod.dumps({'token': token})}\n\n"
         except Exception as e:
             logger.error(f"Streaming error: {e}")
-            yield f"data: {json_mod.dumps({'error': str(e)})}\n\n"
-            return
+            errmsg = "Sorry, the AI service is currently unavailable or experiencing high traffic. Please try again later."
+            yield f"data: {json_mod.dumps({'token': errmsg})}\n\n"
+            full_answer += errmsg
 
         # STEP 7: Post-process — enrich citations
         

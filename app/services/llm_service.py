@@ -244,6 +244,31 @@ class LLMService:
         )
         logger.info(f"Initialized LLM client (model: {self.model}, base_url: {self.settings.llm_base_url})")
 
+    async def _call_with_retry(self, **kwargs) -> Any:
+        import asyncio
+        import time
+        start_time = time.time()
+        delay = 5
+        max_wait = 300  # 5 minutes
+        
+        while True:
+            try:
+                return await self.client.chat.completions.create(**kwargs)
+            except Exception as e:
+                is_503 = False
+                if hasattr(e, 'status_code') and e.status_code == 503:
+                    is_503 = True
+                elif "503" in str(e):
+                    is_503 = True
+                
+                elapsed = time.time() - start_time
+                if not is_503 or elapsed + delay > max_wait:
+                    raise e
+                    
+                logger.warning(f"LLM API 503 error. Retrying in {delay} seconds... (Elapsed: {int(elapsed)}s)")
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 60)
+
     # ----------------------------------------------------------
     # HELPER: build text-only context string from chunks
     # ----------------------------------------------------------
@@ -459,7 +484,7 @@ class LLMService:
         self._log_llm_request(messages)
 
         try:
-            response = await self.client.chat.completions.create(
+            response = await self._call_with_retry(
                 model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
@@ -468,7 +493,7 @@ class LLMService:
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"Error generating response: {e}")
-            raise
+            return "Sorry, the AI service is currently unavailable or experiencing high traffic. Please try again later."
 
     async def generate_direct_response(
         self,
@@ -488,7 +513,7 @@ class LLMService:
         self._log_llm_request(messages)
 
         try:
-            response = await self.client.chat.completions.create(
+            response = await self._call_with_retry(
                 model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
@@ -497,7 +522,7 @@ class LLMService:
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"Error in direct generation: {e}")
-            raise
+            return "Sorry, the AI service is currently unavailable or experiencing high traffic. Please try again later."
 
     async def generate_multimodal_response(
         self,
@@ -581,7 +606,7 @@ class LLMService:
         if retrieved_images or has_user_images:
             try:
                 logger.info(f"Calling model with vision input: {self.model}")
-                response = await self.client.chat.completions.create(
+                response = await self._call_with_retry(
                     model=self.model,
                     messages=messages,
                     temperature=self.settings.llm_temperature,
@@ -602,7 +627,7 @@ class LLMService:
                 "role": "user",
                 "content": f"Context:\n{context_text}\n\nNote: Images could not be rendered.\n\nQuestion: {query}"
             })
-            response = await self.client.chat.completions.create(
+            response = await self._call_with_retry(
                 model=self.model,
                 messages=fallback_messages,
                 temperature=self.settings.llm_temperature,
@@ -611,7 +636,7 @@ class LLMService:
             return response.choices[0].message.content
         except Exception as fallback_error:
             logger.error(f"Fallback also failed: {fallback_error}")
-            raise
+            return "Sorry, the AI service is currently unavailable or experiencing high traffic. Please try again later."
     # ==========================================================
     # STREAMING METHODS
     # ==========================================================
@@ -644,7 +669,7 @@ class LLMService:
         )
 
         try:
-            response = await self.client.chat.completions.create(
+            response = await self._call_with_retry(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -691,7 +716,7 @@ class LLMService:
         ]
 
         try:
-            stream = await self.client.chat.completions.create(
+            stream = await self._call_with_retry(
                 model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
@@ -705,7 +730,7 @@ class LLMService:
                         yield delta.content
         except Exception as e:
             logger.error(f"Error streaming response: {e}")
-            raise
+            yield "Sorry, the AI service is currently unavailable or experiencing high traffic. Please try again later."
 
     async def generate_direct_response_stream(
         self,
@@ -722,7 +747,7 @@ class LLMService:
         ]
 
         try:
-            stream = await self.client.chat.completions.create(
+            stream = await self._call_with_retry(
                 model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
@@ -736,7 +761,7 @@ class LLMService:
                         yield delta.content
         except Exception as e:
             logger.error(f"Error in direct streaming: {e}")
-            raise
+            yield "Sorry, the AI service is currently unavailable or experiencing high traffic. Please try again later."
 
     async def generate_multimodal_response_stream(
         self,
@@ -820,7 +845,7 @@ class LLMService:
         if retrieved_images or has_user_images:
             try:
                 logger.info(f"Streaming multimodal response: {self.model}")
-                stream = await self.client.chat.completions.create(
+                stream = await self._call_with_retry(
                     model=self.model,
                     messages=messages,
                     temperature=self.settings.llm_temperature,
@@ -853,7 +878,7 @@ class LLMService:
 
             self._log_llm_request(fallback_messages)
 
-            stream = await self.client.chat.completions.create(
+            stream = await self._call_with_retry(
                 model=self.model,
                 messages=fallback_messages,
                 temperature=self.settings.llm_temperature,
@@ -867,7 +892,7 @@ class LLMService:
                         yield delta.content
         except Exception as e:
             logger.error(f"Fallback stream also failed: {e}")
-            raise
+            yield "Sorry, the AI service is currently unavailable or experiencing high traffic. Please try again later."
     # ==========================================================
     # IMAGE UTILITIES
     # ==========================================================
@@ -944,7 +969,7 @@ class LLMService:
         ]
 
         try:
-            response = await self.client.chat.completions.create(
+            response = await self._call_with_retry(
                 model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
