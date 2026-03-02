@@ -3,7 +3,7 @@ Chat Data Transfer Objects.
 Strict schemas for Chat operations (Session, Message).
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from datetime import datetime
 
 
@@ -16,6 +16,15 @@ class InlineCitation(BaseModel):
     pages: List[int] = Field(default_factory=list, description="Page numbers")
 
 
+class QueryOptimizationInfo(BaseModel):
+    """Query optimization metadata produced before retrieval."""
+    rewritten_query: str = Field("", description="Cleaned search phrase sent to the vector store")
+    sub_queries: List[str] = Field(default_factory=list, description="Sub-queries for multi-query retrieval")
+    hyde_document: str = Field("", description="Hypothetical document used for HyDE embedding")
+    metadata_filters: Dict[str, Any] = Field(default_factory=dict, description="Extracted metadata filters")
+    is_searchable: bool = Field(True, description="Whether the query triggered a document retrieval search")
+
+
 class ChatMessage(BaseModel):
     """A single message in a chat history."""
     role: str = Field(..., description="Role: 'user' or 'ai'")
@@ -23,6 +32,7 @@ class ChatMessage(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     sources: Optional[dict] = Field(default=None, description="Sources map")
     image_paths: List[str] = Field(default_factory=list, description="List of image paths")
+    query_optimization: Optional[QueryOptimizationInfo] = Field(default=None, description="Query optimization metadata (assistant messages only)")
 
 
 class ChatSession(BaseModel):
@@ -66,3 +76,4 @@ class ChatResponse(BaseModel):
     sources: dict = Field(default_factory=dict, description="Sources map: document_id -> {filename, pages, ...}")
     inline_citations: List[InlineCitation] = Field(default_factory=list, description="Structured inline citations")
     image_results: List[ImageSearchResult] = Field(default_factory=list)
+    query_optimization: Optional[QueryOptimizationInfo] = Field(default=None, description="Query optimization metadata: rewriting, HyDE, sub-queries, filters")

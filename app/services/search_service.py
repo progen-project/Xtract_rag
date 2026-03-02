@@ -64,6 +64,7 @@ class UnifiedSearchService:
         top_k: int = get_settings().top_k,
         document_ids: Optional[List[str]] = None,
         category_ids: Optional[List[str]] = None,
+        metadata_filters: Optional[Dict[str, Any]] = None,
         search_text: bool = True,
         search_tables: bool = True,
         search_images: bool = True,
@@ -103,7 +104,7 @@ class UnifiedSearchService:
             return []
 
         per_collection_k = max(3, top_k // active_searches)
-        filters = self._build_filters(document_ids, category_ids)
+        filters = self._build_filters(document_ids, category_ids, metadata_filters)
 
         # ── 1. Search all collections ──────────────────────────────────────
         if search_text:
@@ -191,6 +192,7 @@ class UnifiedSearchService:
         self,
         document_ids: Optional[List[str]],
         category_ids: Optional[List[str]],
+        metadata_filters: Optional[Dict[str, Any]] = None,
     ):
         """
         Build Qdrant filters for document/category.
@@ -200,22 +202,30 @@ class UnifiedSearchService:
         _resolve_search_filters(), so typically only one of these
         will be non-empty.
         """
-        from qdrant_client.models import Filter, FieldCondition, MatchAny
+        from qdrant_client.models import Filter, FieldCondition, MatchAny, MatchValue
+
+        must_conditions = []
 
         # Document-level filter takes priority (most specific)
         if document_ids:
-            return Filter(must=[
-                FieldCondition(key="document_id", match=MatchAny(any=document_ids))
-            ])
+            must_conditions.append(FieldCondition(key="document_id", match=MatchAny(any=document_ids)))
+        elif category_ids:
+            must_conditions.append(FieldCondition(key="category_id", match=MatchAny(any=category_ids)))
 
-        # Category-level filter as fallback
-        if category_ids:
-            return Filter(must=[
-                FieldCondition(key="category_id", match=MatchAny(any=category_ids))
-            ])
+        # Metadata filters from query optimization
+        if metadata_filters:
+            for k, v in metadata_filters.items():
+                # Handling single values or lists for MatchValue or MatchAny
+                if isinstance(v, list):
+                    must_conditions.append(FieldCondition(key=k, match=MatchAny(any=v)))
+                else:
+                    must_conditions.append(FieldCondition(key=k, match=MatchValue(value=v)))
 
         # No filter — search everything
-        return None
+        if not must_conditions:
+            return None
+            
+        return Filter(must=must_conditions)
 
     def _search_text(
         self,

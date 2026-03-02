@@ -15,10 +15,12 @@ from app.schemas import (
     ChatSession,
     ChatResponse,
     ImageSearchResult,
+    QueryOptimizationInfo,
 )
 from app.utils.exceptions import ChatNotFoundError, ValidationError
 from app.services.search_service import UnifiedSearchService
 from app.services.retrieval_service import RetrievalOrchestrator
+from app.services.query_optimization import get_query_optimizer
 
 logger = logging.getLogger(__name__)
 
@@ -211,17 +213,19 @@ class ChatController:
         self.llm.initialize()
 
         # ========================================
-        # STEP 1: GUARD CHECK
+        # STEP 1: GUARD CHECK & QUERY OPTIMIZATION
         # ========================================
         is_relevant = True
         if self.guard:
             is_relevant = self.guard.check(message)
             logger.info(f"LLM Guard relevance: {is_relevant}")
 
-        if not is_relevant:
-            logger.info("Message irrelevant to domain. Using direct path.")
+        optimizer = get_query_optimizer()
+        optimized_query = await optimizer.optimize_query(message)
+
+        if not is_relevant or not optimized_query.is_searchable:
+            logger.info("Message irrelevant or not searchable. Using direct path.")
             answer = await self.llm.generate_direct_response(message)
-            
             
             # Create assistant message (no sources/images for irrelevant queries)
             assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -246,11 +250,10 @@ class ChatController:
             )
 
         # ========================================
-        # STEP 2: UNIFIED SEARCH
+        # STEP 2: OPTIMIZED SEARCH
         # ========================================
         query_image_data = None
         if image_paths:
-            # Load first image for search
             try:
                 import base64
                 with open(image_paths[0], "rb") as f:
@@ -258,15 +261,13 @@ class ChatController:
             except:
                 pass
         
-        search_results = self.search_service.search(
-            query_text=message,
+        search_results = await optimizer.run_optimized_search(
+            optimized=optimized_query,
+            search_service=self.search_service,
             query_image_data=query_image_data,
             top_k=top_k,
             document_ids=document_ids,
             category_ids=category_ids,
-            search_text=True,
-            search_tables=True,
-            search_images=True
         )
         
         # ========================================
@@ -373,8 +374,15 @@ class ChatController:
             logger.info(f"No inline citations found. Keeping all {len(sources)} sources.")
         
         # ========================================
-        # STEP 7: Create assistant message
+        # STEP 7: Build optimization info & save assistant message
         # ========================================
+        opt_info = QueryOptimizationInfo(
+            rewritten_query=optimized_query.rewritten_query,
+            sub_queries=optimized_query.sub_queries,
+            hyde_document=optimized_query.hyde_document,
+            metadata_filters=optimized_query.metadata_filters,
+            is_searchable=optimized_query.is_searchable,
+        )
         assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
         assistant_message = ChatMessage(
             message_id=assistant_message_id,
@@ -382,6 +390,7 @@ class ChatController:
             content=answer,
             image_paths=[img.image_path for img in images_from_search],
             sources=sources,
+            query_optimization=opt_info,
             timestamp=datetime.utcnow()
         )
         
@@ -421,7 +430,8 @@ class ChatController:
             title=title,
             sources=sources,
             inline_citations=inline_citations,
-            image_results=image_results
+            image_results=image_results,
+            query_optimization=opt_info,
         )
 
     async def send_message_stream(
@@ -491,7 +501,7 @@ class ChatController:
         self.indexer.initialize()
         self.llm.initialize()
 
-        # STEP 1: UNIFIED SEARCH (and Guard Check)
+        # STEP 1: GUARD CHECK & QUERY OPTIMIZATION
         query_image_data = None
         if image_paths:
             try:
@@ -506,8 +516,11 @@ class ChatController:
             is_relevant = self.guard.check(message)
             logger.info(f"LLM Guard relevance (stream): {is_relevant}")
 
-        if not is_relevant:
-            logger.info("Message irrelevant to domain (stream). Using direct path.")
+        optimizer = get_query_optimizer()
+        optimized_query = await optimizer.optimize_query(message)
+
+        if not is_relevant or not optimized_query.is_searchable:
+            logger.info("Message irrelevant or not searchable (stream). Using direct path.")
             full_answer = ""
             async for token in self.llm.generate_direct_response_stream(message):
                 full_answer += token
@@ -537,15 +550,14 @@ class ChatController:
             yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'username': username, 'message_id': assistant_message_id, 'answer': full_answer, 'title': title, 'sources': {}, 'inline_citations': [], 'image_results': []})}\n\n"
             return
 
-        search_results = self.search_service.search(
-            query_text=message,
+        # STEP 2: OPTIMIZED SEARCH
+        search_results = await optimizer.run_optimized_search(
+            optimized=optimized_query,
+            search_service=self.search_service,
             query_image_data=query_image_data,
             top_k=top_k,
             document_ids=document_ids,
             category_ids=category_ids,
-            search_text=True,
-            search_tables=True,
-            search_images=True
         )
 
         # STEP 2: ENRICH
@@ -619,6 +631,13 @@ class ChatController:
         logger.info(f"Retaining all {len(sources)} sources without filtering.")
 
         # STEP 8: Save assistant message
+        opt_info = QueryOptimizationInfo(
+            rewritten_query=optimized_query.rewritten_query,
+            sub_queries=optimized_query.sub_queries,
+            hyde_document=optimized_query.hyde_document,
+            metadata_filters=optimized_query.metadata_filters,
+            is_searchable=optimized_query.is_searchable,
+        )
         assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
         assistant_message = ChatMessage(
             message_id=assistant_message_id,
@@ -626,6 +645,7 @@ class ChatController:
             content=answer,
             image_paths=[img.image_path for img in images_from_search],
             sources=sources,
+            query_optimization=opt_info,
             timestamp=datetime.utcnow()
         )
         await self.chat_repo.add_message(chat_id, assistant_message)
@@ -655,7 +675,7 @@ class ChatController:
                 logger.warning(f"Failed to auto-generate chat title (stream): {e}")
 
         # STEP 9: Send final event with metadata
-        yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'username': username, 'message_id': assistant_message_id, 'answer': answer, 'title': title, 'sources': sources, 'inline_citations': inline_citations, 'image_results': image_results})}\n\n"
+        yield f"data: {json_mod.dumps({'done': True, 'chat_id': chat_id, 'username': username, 'message_id': assistant_message_id, 'answer': answer, 'title': title, 'sources': sources, 'inline_citations': inline_citations, 'image_results': image_results, 'query_optimization': opt_info.model_dump()})}\n\n"
     
     def _enrich_inline_citations(
         self,

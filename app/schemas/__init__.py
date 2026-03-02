@@ -24,6 +24,7 @@ from .query import (
 )
 from .chat import (
     InlineCitation,
+    QueryOptimizationInfo,
     ChatMessage,
     ChatSession,
     ChatRequest,
@@ -59,6 +60,7 @@ __all__ = [
     "ImageSearchResponse",
     # Chat
     "InlineCitation",
+    "QueryOptimizationInfo",
     "ChatMessage",
     "ChatSession",
     "ChatRequest",

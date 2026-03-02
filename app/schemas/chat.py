@@ -17,6 +17,15 @@ class InlineCitation(BaseModel):
     pages: List[int] = Field(default_factory=list, description="Page numbers referenced")
 
 
+class QueryOptimizationInfo(BaseModel):
+    """Metadata produced by the query optimization step, attached to each assistant response."""
+    rewritten_query: str = Field("", description="Cleaned, instruction-free search phrase sent to the vector store")
+    sub_queries: List[str] = Field(default_factory=list, description="Sub-queries used for multi-query retrieval")
+    hyde_document: str = Field("", description="Hypothetical document used to enrich embedding (HyDE)")
+    metadata_filters: dict = Field(default_factory=dict, description="Extracted metadata filters (e.g. year, category)")
+    is_searchable: bool = Field(True, description="Whether the query triggered a document retrieval search")
+
+
 class ChatMessage(BaseModel):
     """A single message in a chat session."""
     message_id: str
@@ -24,6 +33,7 @@ class ChatMessage(BaseModel):
     content: str
     image_paths: List[str] = Field(default_factory=list)
     sources: Optional[dict] = Field(default=None, description="Sources map: document_id -> list of page numbers")
+    query_optimization: Optional[QueryOptimizationInfo] = Field(default=None, description="Query optimization metadata (assistant messages only)")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -61,3 +71,4 @@ class ChatResponse(BaseModel):
     sources: dict = Field(default_factory=dict, description="Sources map: document_id -> {filename, pages, ...}")
     inline_citations: List[InlineCitation] = Field(default_factory=list, description="Structured inline citations linking answer parts to specific sources")
     image_results: List[ImageSearchResult] = Field(default_factory=list)
+    query_optimization: Optional[QueryOptimizationInfo] = Field(default=None, description="Query optimization metadata: rewriting, HyDE, sub-queries, filters")
