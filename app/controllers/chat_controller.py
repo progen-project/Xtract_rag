@@ -299,22 +299,7 @@ class ChatController:
             f"Enriched: {len(text_chunks)} text, "
             f"{len(tables)} tables, {len(images_from_search)} images"
         )
-        
-        # ========================================
-        # STEP 3: Prepare image paths for LLM
-        # ========================================
-        all_image_paths = []
-        
-        # Images from search results
-        for img in images_from_search:
-            if img.image_path and Path(img.image_path).exists():
-                all_image_paths.append(img.image_path)
-        
-        # Limit to avoid token overflow
-        all_image_paths = all_image_paths[:3]
-        
-        logger.info(f"Prepared {len(all_image_paths)} images for LLM: {all_image_paths}")
-        logger.info(f"User uploaded images: {image_paths}")  # Log user images too
+        logger.info(f"User uploaded images: {image_paths}")
         
         # ========================================
         # STEP 4: Build chat history
@@ -348,17 +333,57 @@ class ChatController:
                         tables=[]
                     )
                 )
-            
-            answer = await self.llm.generate_multimodal_response(
-                query=message,
-                context_chunks=retrieved_chunks,
-                tables=tables,
-                retrieved_images=images_from_search,
-                user_uploaded_images=image_paths,
-                chat_history=chat_history_msgs if chat_history_msgs else None,
-                max_retrieved_images=3,
-                max_user_images=5
-            )
+
+            # ============================================================
+            # 5-SLOT IMAGE LOGIC
+            # MAX_TOTAL_IMAGES = 5 (settings.max_multimodal_images)
+            # user=0              → text-only LLM, retrieved images ignored
+            # user=1..4           → multimodal LLM, fill remaining with retrieved
+            # user=5 (full)       → multimodal LLM, skip all retrieved images
+            # ============================================================
+            MAX_TOTAL = self.settings.max_multimodal_images  # 5
+            user_image_count = len(image_paths) if image_paths else 0
+
+            if user_image_count == 0:
+                # No user images → text-only path
+                logger.info("No user images — routing to TEXT-ONLY LLM (retrieved images ignored)")
+                answer = await self.llm.generate_response(
+                    query=message,
+                    context_chunks=retrieved_chunks,
+                )
+            else:
+                # User has images — decide how many retrieved images to attach
+                if user_image_count >= MAX_TOTAL:
+                    # Slots full — skip all retrieved images
+                    retrieved_for_llm = None
+                    logger.info(
+                        f"User filled all {MAX_TOTAL} image slots — "
+                        "retrieved images skipped for multimodal LLM"
+                    )
+                else:
+                    # Fill remaining slots with top retrieved images
+                    remaining_slots = MAX_TOTAL - user_image_count
+                    valid_retrieved = [
+                        img for img in images_from_search
+                        if img.image_path and Path(img.image_path).exists()
+                    ]
+                    retrieved_for_llm = valid_retrieved[:remaining_slots] or None
+                    logger.info(
+                        f"User has {user_image_count} image(s); "
+                        f"attaching {len(retrieved_for_llm or [])} retrieved image(s) "
+                        f"(filling to {MAX_TOTAL} slots)"
+                    )
+
+                answer = await self.llm.generate_multimodal_response(
+                    query=message,
+                    context_chunks=retrieved_chunks,
+                    tables=tables,
+                    retrieved_images=retrieved_for_llm,
+                    user_uploaded_images=image_paths,
+                    chat_history=chat_history_msgs if chat_history_msgs else None,
+                    max_retrieved_images=len(retrieved_for_llm) if retrieved_for_llm else 0,
+                    max_user_images=MAX_TOTAL,
+                )
             
             logger.info("Response generated successfully")
             
@@ -586,12 +611,7 @@ class ChatController:
         tables = enriched["tables"]
         images_from_search = enriched["images"]
 
-        # STEP 3: Prepare image paths
-        all_image_paths = []
-        for img in images_from_search:
-            if img.image_path and Path(img.image_path).exists():
-                all_image_paths.append(img.image_path)
-        all_image_paths = all_image_paths[:3]
+        # STEP 3: (Image slot logic applied later during LLM routing)
 
         # STEP 4: Build chat history
         chat_history_msgs = []
@@ -620,19 +640,56 @@ class ChatController:
                 )
             )
 
+        # ============================================================
+        # 5-SLOT IMAGE LOGIC (streaming)
+        # ============================================================
+        MAX_TOTAL = self.settings.max_multimodal_images  # 5
+        user_image_count = len(image_paths) if image_paths else 0
+
         # STEP 6: Stream LLM response
         full_answer = ""
         try:
-            async for token in self.llm.generate_multimodal_response_stream(
-                query=message,
-                context_chunks=retrieved_chunks,
-                tables=tables,
-                retrieved_images=images_from_search if all_image_paths else None,
-                user_uploaded_images=image_paths,
-                chat_history=chat_history_msgs if chat_history_msgs else None,
-            ):
-                full_answer += token
-                yield f"data: {json_mod.dumps({'token': token})}\n\n"
+            if user_image_count == 0:
+                # No user images → text-only stream
+                logger.info("No user images — routing to TEXT-ONLY LLM stream (retrieved images ignored)")
+                async for token in self.llm.generate_response_stream(
+                    query=message,
+                    context_chunks=retrieved_chunks,
+                ):
+                    full_answer += token
+                    yield f"data: {json_mod.dumps({'token': token})}\n\n"
+            else:
+                # Determine retrieved images to pass
+                if user_image_count >= MAX_TOTAL:
+                    retrieved_for_llm = None
+                    logger.info(
+                        f"User filled all {MAX_TOTAL} image slots (stream) — "
+                        "retrieved images skipped"
+                    )
+                else:
+                    remaining_slots = MAX_TOTAL - user_image_count
+                    valid_retrieved = [
+                        img for img in images_from_search
+                        if img.image_path and Path(img.image_path).exists()
+                    ]
+                    retrieved_for_llm = valid_retrieved[:remaining_slots] or None
+                    logger.info(
+                        f"User has {user_image_count} image(s) (stream); "
+                        f"attaching {len(retrieved_for_llm or [])} retrieved image(s)"
+                    )
+
+                async for token in self.llm.generate_multimodal_response_stream(
+                    query=message,
+                    context_chunks=retrieved_chunks,
+                    tables=tables,
+                    retrieved_images=retrieved_for_llm,
+                    user_uploaded_images=image_paths,
+                    chat_history=chat_history_msgs if chat_history_msgs else None,
+                    max_retrieved_images=len(retrieved_for_llm) if retrieved_for_llm else 0,
+                    max_user_images=MAX_TOTAL,
+                ):
+                    full_answer += token
+                    yield f"data: {json_mod.dumps({'token': token})}\n\n"
         except Exception as e:
             logger.error(f"Streaming error: {e}")
             errmsg = "Sorry, the AI service is currently unavailable or experiencing high traffic. Please try again later."

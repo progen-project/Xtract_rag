@@ -17,13 +17,21 @@ class Settings(BaseSettings):
     # Redis Configuration
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     
-    # LLM API Configuration (DeepInfra / OpenAI-compatible)
+    # LLM API Configuration — Text-only client (DeepInfra / OpenAI-compatible)
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
     llm_model: str = Field(default="meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", alias="LLM_MODEL")
     llm_base_url: str = Field(default="https://api.deepinfra.com/v1/openai", alias="LLM_BASE_URL")
     llm_temperature: float = Field(default=0.0, alias="LLM_TEMPERATURE")
     llm_max_tokens: int = Field(default=5000, alias="LLM_MAX_TOKENS")
-    
+
+    # Multimodal (Vision) LLM client — leave empty to reuse text LLM credentials
+    multimodal_llm_model: str = Field(default="", alias="MULTIMODAL_LLM_MODEL")
+    multimodal_llm_base_url: str = Field(default="", alias="MULTIMODAL_LLM_BASE_URL")
+    multimodal_llm_api_key: str = Field(default="", alias="MULTIMODAL_LLM_API_KEY")
+
+    # Absolute hard cap on images per multimodal request
+    max_multimodal_images: int = Field(default=5, alias="MAX_MULTIMODAL_IMAGES")
+
     # Optional: OpenAI for vision tasks
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     
@@ -58,7 +66,7 @@ class Settings(BaseSettings):
     # Chat Configuration
     chat_images_dir: Path = Field(default=Path("./chat_images"), alias="CHAT_IMAGES_DIR")
     chat_context_window: int = Field(default=10, alias="CHAT_CONTEXT_WINDOW")
-    max_chat_images: int = Field(default=10, alias="MAX_CHAT_IMAGES")
+    max_chat_images: int = Field(default=5, alias="MAX_CHAT_IMAGES")
     
     # Reranking Configuration
     use_reranker: bool = Field(default=True, alias="USE_RERANKER")

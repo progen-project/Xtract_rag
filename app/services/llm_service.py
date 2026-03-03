@@ -223,49 +223,100 @@ Always respond in the **same language as the user's question**.
 
 class LLMService:
     """
-    LLM service using an OpenAI-compatible API (DeepInfra by default).
-    Supports text generation and multimodal (vision) queries.
+    LLM service with TWO dedicated clients:
+      - self.client            → text-only LLM (all RAG text answers, direct responses, titles)
+      - self.multimodal_client → vision-capable LLM (user images + retrieved images, max 5 total)
+    If multimodal-specific settings are empty, self.multimodal_client falls back to self.client.
     """
 
     def __init__(self):
         self.settings = get_settings()
+        # Text-only client
         self.client: Optional[AsyncOpenAI] = None
-        self.model = self.settings.llm_model
+        self.model: str = self.settings.llm_model
+        # Multimodal (vision) client
+        self.multimodal_client: Optional[AsyncOpenAI] = None
+        self.multimodal_model: str = (
+            self.settings.multimodal_llm_model or self.settings.llm_model
+        )
 
     def initialize(self) -> None:
-        """Initialize the LLM client via OpenAI SDK."""
+        """Initialize both LLM clients."""
         if not self.settings.llm_api_key:
             logger.warning("LLM API key not configured (LLM_API_KEY)")
             return
 
+        # ── Text-only client ──────────────────────────────────────────
         self.client = AsyncOpenAI(
             api_key=self.settings.llm_api_key,
             base_url=self.settings.llm_base_url,
         )
-        logger.info(f"Initialized LLM client (model: {self.model}, base_url: {self.settings.llm_base_url})")
+        logger.info(
+            f"Initialized TEXT client  │ model={self.model} │ url={self.settings.llm_base_url}"
+        )
 
-    async def _call_with_retry(self, **kwargs) -> Any:
+        # ── Multimodal (vision) client ───────────────────────────────
+        mm_api_key   = self.settings.multimodal_llm_api_key   or self.settings.llm_api_key
+        mm_base_url  = self.settings.multimodal_llm_base_url  or self.settings.llm_base_url
+
+        self.multimodal_client = AsyncOpenAI(
+            api_key=mm_api_key,
+            base_url=mm_base_url,
+        )
+        if self.settings.multimodal_llm_api_key or self.settings.multimodal_llm_base_url:
+            logger.info(
+                f"Initialized MULTIMODAL client  │ model={self.multimodal_model} │ url={mm_base_url}"
+            )
+        else:
+            logger.info(
+                "Multimodal client sharing TEXT client credentials "
+                f"(MULTIMODAL_LLM_* not set) │ model={self.multimodal_model}"
+            )
+
+    async def _call_with_retry(
+        self,
+        client: Optional[AsyncOpenAI] = None,
+        model: Optional[str] = None,
+        **kwargs,
+    ) -> Any:
+        """
+        Call a chat-completion endpoint with exponential-back-off retry on 503.
+
+        Parameters
+        ----------
+        client : AsyncOpenAI, optional
+            Which client to use.  Defaults to self.client (text-only).
+        model  : str, optional
+            Which model to request.  Defaults to self.model (text model).
+        **kwargs :
+            Forwarded as-is to client.chat.completions.create().
+            Do NOT pass 'model' in kwargs — use the positional arg instead.
+        """
         import asyncio
         import time
+
+        _client = client or self.client
+        _model  = model  or self.model
+        kwargs["model"] = _model
+
         start_time = time.time()
         delay = 5
         max_wait = 300  # 5 minutes
-        
+
         while True:
             try:
-                return await self.client.chat.completions.create(**kwargs)
+                return await _client.chat.completions.create(**kwargs)
             except Exception as e:
-                is_503 = False
-                if hasattr(e, 'status_code') and e.status_code == 503:
-                    is_503 = True
-                elif "503" in str(e):
-                    is_503 = True
-                
+                is_503 = (
+                    (hasattr(e, "status_code") and e.status_code == 503)
+                    or "503" in str(e)
+                )
                 elapsed = time.time() - start_time
                 if not is_503 or elapsed + delay > max_wait:
-                    raise e
-                    
-                logger.warning(f"LLM API 503 error. Retrying in {delay} seconds... (Elapsed: {int(elapsed)}s)")
+                    raise
+                logger.warning(
+                    f"LLM API 503 — retry in {delay}s (elapsed {int(elapsed)}s)"
+                )
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 60)
 
@@ -485,6 +536,7 @@ class LLMService:
 
         try:
             response = await self._call_with_retry(
+                client=self.client,
                 model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
@@ -514,6 +566,7 @@ class LLMService:
 
         try:
             response = await self._call_with_retry(
+                client=self.client,
                 model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
@@ -535,8 +588,9 @@ class LLMService:
         max_retrieved_images: int = 3,
         max_user_images: int = 5,
     ) -> str:
-        if not self.client:
-            raise ValueError("LLM client not initialized")
+        """Generate a MULTIMODAL response using the vision-capable client."""
+        if not self.multimodal_client:
+            raise ValueError("Multimodal LLM client not initialized")
 
         has_user_images = bool(user_uploaded_images)
         
@@ -605,9 +659,14 @@ class LLMService:
 
         if retrieved_images or has_user_images:
             try:
-                logger.info(f"Calling model with vision input: {self.model}")
+                logger.info(
+                    f"Calling MULTIMODAL client: {self.multimodal_model} "
+                    f"(user_imgs={len(user_uploaded_images or [])}, "
+                    f"retrieved_imgs={len(retrieved_images or [])})"
+                )
                 response = await self._call_with_retry(
-                    model=self.model,
+                    client=self.multimodal_client,
+                    model=self.multimodal_model,
                     messages=messages,
                     temperature=self.settings.llm_temperature,
                     max_tokens=self.settings.llm_max_tokens,
@@ -615,9 +674,9 @@ class LLMService:
                 logger.info("Multimodal response generated successfully")
                 return response.choices[0].message.content
             except Exception as e:
-                logger.warning(f"Multimodal call failed: {e}. Falling back to text-only.")
+                logger.warning(f"Multimodal call failed: {e}. Falling back to text-only client.")
 
-        # Fallback unchanged...
+        # Text-only fallback using the TEXT client
         try:
             fallback_messages = [{"role": "system", "content": _BASE_RAG_SYSTEM}]
             if chat_history:
@@ -628,6 +687,7 @@ class LLMService:
                 "content": f"Context:\n{context_text}\n\nNote: Images could not be rendered.\n\nQuestion: {query}"
             })
             response = await self._call_with_retry(
+                client=self.client,
                 model=self.model,
                 messages=fallback_messages,
                 temperature=self.settings.llm_temperature,
@@ -670,6 +730,7 @@ class LLMService:
 
         try:
             response = await self._call_with_retry(
+                client=self.client,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -677,8 +738,6 @@ class LLMService:
                 ],
                 temperature=0.2,
                 max_tokens=512,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}}  # Qwen3 specific
-
             )
             raw_title = response.choices[0].message.content
             
@@ -717,6 +776,7 @@ class LLMService:
 
         try:
             stream = await self._call_with_retry(
+                client=self.client,
                 model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
@@ -748,6 +808,7 @@ class LLMService:
 
         try:
             stream = await self._call_with_retry(
+                client=self.client,
                 model=self.model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
@@ -774,9 +835,9 @@ class LLMService:
         max_retrieved_images: int = 3,
         max_user_images: int = 5,
     ):
-        """Stream a multimodal response token-by-token with structured chat history."""
-        if not self.client:
-            raise ValueError("LLM client not initialized")
+        """Stream a MULTIMODAL response token-by-token using the vision-capable client."""
+        if not self.multimodal_client:
+            raise ValueError("Multimodal LLM client not initialized")
 
         has_user_images = bool(user_uploaded_images)
 
@@ -844,9 +905,14 @@ class LLMService:
 
         if retrieved_images or has_user_images:
             try:
-                logger.info(f"Streaming multimodal response: {self.model}")
+                logger.info(
+                    f"Streaming MULTIMODAL client: {self.multimodal_model} "
+                    f"(user_imgs={len(user_uploaded_images or [])}, "
+                    f"retrieved_imgs={len(retrieved_images or [])})"
+                )
                 stream = await self._call_with_retry(
-                    model=self.model,
+                    client=self.multimodal_client,
+                    model=self.multimodal_model,
                     messages=messages,
                     temperature=self.settings.llm_temperature,
                     max_tokens=self.settings.llm_max_tokens,
@@ -859,7 +925,7 @@ class LLMService:
                             yield delta.content
                 return  # Vision succeeded
             except Exception as e:
-                logger.warning(f"Multimodal stream failed: {e}. Falling back to text-only.")
+                logger.warning(f"Multimodal stream failed: {e}. Falling back to text-only client.")
 
         # Fallback: text-only stream
         try:
@@ -879,6 +945,7 @@ class LLMService:
             self._log_llm_request(fallback_messages)
 
             stream = await self._call_with_retry(
+                client=self.client,
                 model=self.model,
                 messages=fallback_messages,
                 temperature=self.settings.llm_temperature,
@@ -929,9 +996,9 @@ class LLMService:
         query: Optional[str] = None,
         context_text: Optional[str] = None,
     ) -> str:
-        """Analyze a single image using vision model."""
-        if not self.client:
-            raise ValueError("LLM client not initialized")
+        """Analyze a single image using the vision (multimodal) model."""
+        if not self.multimodal_client:
+            raise ValueError("Multimodal LLM client not initialized")
 
         if not Path(image.image_path).exists():
             return f"Image not available: {image.image_path}"
@@ -970,7 +1037,8 @@ class LLMService:
 
         try:
             response = await self._call_with_retry(
-                model=self.model,
+                client=self.multimodal_client,
+                model=self.multimodal_model,
                 messages=messages,
                 temperature=self.settings.llm_temperature,
                 max_tokens=self.settings.llm_max_tokens,

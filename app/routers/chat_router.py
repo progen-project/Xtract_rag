@@ -55,11 +55,20 @@ async def chat(
         except json.JSONDecodeError:
             parsed_document_ids = [did.strip() for did in document_ids.split(",") if did.strip()]
     
+    # Enforce max 5 images at the API boundary
+    MAX_IMAGES = 5
+    real_images = [img for img in images if img.filename]
+    if len(real_images) > MAX_IMAGES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Maximum {MAX_IMAGES} images allowed per message. You uploaded {len(real_images)}."
+        )
+
     # Save images
     image_paths = []
-    if images and images[0].filename:
+    if real_images:
         temp_chat_id = chat_id or f"temp_{__import__('uuid').uuid4().hex[:12]}"
-        image_paths = await controller.save_uploaded_images(images, temp_chat_id)
+        image_paths = await controller.save_uploaded_images(real_images, temp_chat_id)
     
     response = await controller.send_message(
         message=message,
@@ -115,11 +124,20 @@ async def chat_stream(
         except json.JSONDecodeError:
             parsed_document_ids = [did.strip() for did in document_ids.split(",") if did.strip()]
 
+    # Enforce max 5 images at the API boundary
+    MAX_IMAGES = 5
+    real_images = [img for img in images if img.filename]
+    if len(real_images) > MAX_IMAGES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Maximum {MAX_IMAGES} images allowed per message. You uploaded {len(real_images)}."
+        )
+
     # Save images
     image_paths = []
-    if images and images[0].filename:
+    if real_images:
         temp_chat_id = chat_id or f"temp_{__import__('uuid').uuid4().hex[:12]}"
-        image_paths = await controller.save_uploaded_images(images, temp_chat_id)
+        image_paths = await controller.save_uploaded_images(real_images, temp_chat_id)
 
     return StreamingResponse(
         controller.send_message_stream(
