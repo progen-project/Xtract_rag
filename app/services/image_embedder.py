@@ -65,6 +65,17 @@ class BGEVLEmbedder:
                 self.MODEL_NAME, 
                 trust_remote_code=True
             )
+            
+            # BGE-VL models expose set_processor(); plain CLIPModel does not.
+            # If the remote code was not fetched, fall back gracefully but stay
+            # un-initialized so the next request can retry.
+            if not hasattr(self.model, "set_processor"):
+                raise AttributeError(
+                    f"Loaded model has no 'set_processor'. "
+                    "The HuggingFace remote code may not have been fetched. "
+                    "Ensure trust_remote_code=True is honoured and the model cache is valid."
+                )
+            
             self.model.set_processor(self.MODEL_NAME)
             self.model.eval()
             
@@ -75,16 +86,18 @@ class BGEVLEmbedder:
             
             logger.info(f"BGE-VL initialized. Embedding dimension: {self._embedding_dim}")
             self._initialized = True
+            self._use_fallback = False
             
         except ImportError as e:
             logger.warning(f"Transformers not available: {e}")
             self._use_fallback = True
-            self._initialized = True
+            self._initialized = True  # no point retrying without the library
         except Exception as e:
             logger.error(f"Failed to load BGE-VL model: {e}")
             logger.warning("Using fallback text embeddings")
+            # Do NOT set _initialized=True here — allow the next request to retry.
+            # We do set _use_fallback so THIS call can proceed without images.
             self._use_fallback = True
-            self._initialized = True
     
     @property
     def embedding_dim(self) -> int:

@@ -412,6 +412,19 @@ class UnifiedSearchService:
             if not embedding:
                 return []
 
+            # Guard: verify embedding dimension matches the image collection.
+            # The fallback text embedder produces 384-dim vectors but the image
+            # collection expects 512-dim (BGE-VL). Sending the wrong size causes
+            # a Qdrant 400 "Vector dimension error" — skip silently instead.
+            EXPECTED_DIM = 512  # BGE-VL-base output dimension
+            if len(embedding) != EXPECTED_DIM:
+                logger.warning(
+                    f"Image search skipped: embedding dim {len(embedding)} "
+                    f"≠ expected {EXPECTED_DIM} (BGE-VL not ready yet, "
+                    "will retry on next request)"
+                )
+                return []
+
             results = self.qdrant_client.query_points(
                 collection_name=image_collection,
                 query=embedding,
