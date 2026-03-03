@@ -78,7 +78,16 @@ Fields:
    Example: "Compare drilling fluid types A and B" → ["drilling fluid type A", "drilling fluid type B"]
 4. hyde_document (str): a 2-3 sentence hypothetical document excerpt that would answer the query.
    Write as if it were a passage found in a petroleum engineering report.
-5. metadata_filters (dict): year, author, status, category, etc. extracted from the query. {} if none.
+5. metadata_filters (dict): Extract ONLY the following supported filter keys from the query.
+   Return {} if none of these are explicitly mentioned by the user.
+   SUPPORTED KEYS ONLY — do NOT invent other keys:
+   - "page_start" (int): the starting page number mentioned (e.g. "page 10" → {"page_start": 10})
+   - "page_end"   (int): the ending page number mentioned
+   - "section_title" (str): exact section name if explicitly stated
+   - "has_images" (bool): true if user asks for results with images/figures
+   - "has_tables" (bool): true if user asks for results with tables/data
+   DO NOT use keys like: organization, document_type, author, year, category, standard, source.
+   Those fields do not exist in the database and will break the search.
 
 Output format (strict JSON):
 {
@@ -161,7 +170,22 @@ class QueryOptimizationService:
         optimized search queries are sent to the vector store.
         """
         queries = optimized.all_search_queries
-        metadata_filters = optimized.metadata_filters or None
+
+        # ── Sanitize metadata_filters ─────────────────────────────────────
+        # Only pass keys that actually exist in the Qdrant payload schema.
+        # The LLM may hallucinate keys like 'organization' or 'document_type'
+        # which don't exist and would return 0 results.
+        _VALID_FILTER_KEYS = frozenset({
+            "page_start", "page_end", "section_title", "has_images", "has_tables"
+        })
+        raw_filters = optimized.metadata_filters or {}
+        invalid_keys = set(raw_filters) - _VALID_FILTER_KEYS
+        if invalid_keys:
+            logger.warning(
+                "Dropping invalid metadata_filter key(s) not in Qdrant schema: %s",
+                sorted(invalid_keys),
+            )
+        metadata_filters = {k: v for k, v in raw_filters.items() if k in _VALID_FILTER_KEYS} or None
 
         # ── 1. Search for every query variant in parallel ─────────────
         tasks = [
