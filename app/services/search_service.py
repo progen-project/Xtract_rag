@@ -71,6 +71,7 @@ class UnifiedSearchService:
         alpha_text: float = 0.5,
         alpha_tables: float = 0.3,
         alpha_images: float = 0.2,
+        skip_rerank: bool = False,
     ) -> List[SearchResult]:
         """
         Unified search across all collections.
@@ -93,6 +94,7 @@ class UnifiedSearchService:
             search_tables: Include tables
             search_images: Include images
             alpha_*: Weights for each type (should sum to 1.0)
+            skip_rerank: If True, skip internal reranking (caller handles it).
 
         Returns:
             List of unified SearchResult objects sorted by score
@@ -161,10 +163,8 @@ class UnifiedSearchService:
                 f"using top-{fallback_n} fallback (no threshold applied)"
             )
 
-        # ── 4. Rerank الـ candidates المتبقية ─────────────────────────────
-        # الـ reranker بيرتب فقط — مش بيفلتر
-        # الـ sigmoid normalized scores (0-1) بتُستخدم للترتيب مش للـ threshold
-        if self.settings.use_reranker and candidates:
+        # ── 4. Rerank candidates (skip if caller owns reranking) ──────────
+        if not skip_rerank and self.settings.use_reranker and candidates:
             logger.info(f"Reranking {len(candidates)} candidates...")
             self.rerank_service.initialize()
 
@@ -179,6 +179,14 @@ class UnifiedSearchService:
             logger.info("Reranking completed")
 
         # ── 5. Final slice ─────────────────────────────────────────────────
+        # When skip_rerank is set, return all candidates — the caller decides how many to keep.
+        if skip_rerank:
+            logger.info(
+                f"Unified search (skip_rerank) returned {len(candidates)} results "
+                f"(from {len(all_results)} initial candidates)"
+            )
+            return candidates
+
         final_top_k = self.settings.rerank_top_k
         final_results = candidates[:final_top_k]
         logger.info(

@@ -176,6 +176,7 @@ class QueryOptimizationService:
                 search_text=True,
                 search_tables=True,
                 search_images=True,
+                skip_rerank=True,   # optimizer owns the single rerank on the merged pool
             )
             for q in queries
         ]
