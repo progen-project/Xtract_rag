@@ -111,3 +111,26 @@ class ChatRepository:
             {"$set": {"title": title, "updated_at": datetime.utcnow()}}
         )
         return result.modified_count > 0
+
+    async def update_message_optimization(
+        self,
+        chat_id: str,
+        message_id: str,
+        optimization_data: dict,
+    ) -> bool:
+        """
+        Patch the query_optimization field of a specific message in the messages array.
+        Uses MongoDB arrayFilters to target the message by message_id.
+        Called after optimize_query() to attach optimization info to the user message.
+        """
+        result = await self.collection.update_one(
+            {"_id": chat_id, "messages.message_id": message_id},
+            {
+                "$set": {
+                    "messages.$[msg].query_optimization": optimization_data,
+                    "updated_at": datetime.utcnow(),
+                }
+            },
+            array_filters=[{"msg.message_id": message_id}],
+        )
+        return result.modified_count > 0

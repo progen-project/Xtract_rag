@@ -223,6 +223,20 @@ class ChatController:
         optimizer = get_query_optimizer()
         optimized_query = await optimizer.optimize_query(message)
 
+        # Attach optimization data to the USER message in DB (it describes HOW the query was processed)
+        opt_info = QueryOptimizationInfo(
+            rewritten_query=optimized_query.rewritten_query,
+            sub_queries=optimized_query.sub_queries,
+            hyde_document=optimized_query.hyde_document,
+            metadata_filters=optimized_query.metadata_filters,
+            is_searchable=optimized_query.is_searchable,
+        )
+        await self.chat_repo.update_message_optimization(
+            chat_id=chat_id,
+            message_id=user_message_id,
+            optimization_data=opt_info.model_dump(),
+        )
+
         if not is_relevant or not optimized_query.is_searchable:
             logger.info("Message irrelevant or not searchable. Using direct path.")
             answer = await self.llm.generate_direct_response(message)
@@ -374,15 +388,8 @@ class ChatController:
             logger.info(f"No inline citations found. Keeping all {len(sources)} sources.")
         
         # ========================================
-        # STEP 7: Build optimization info & save assistant message
+        # STEP 7: Save assistant message
         # ========================================
-        opt_info = QueryOptimizationInfo(
-            rewritten_query=optimized_query.rewritten_query,
-            sub_queries=optimized_query.sub_queries,
-            hyde_document=optimized_query.hyde_document,
-            metadata_filters=optimized_query.metadata_filters,
-            is_searchable=optimized_query.is_searchable,
-        )
         assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
         assistant_message = ChatMessage(
             message_id=assistant_message_id,
@@ -390,7 +397,6 @@ class ChatController:
             content=answer,
             image_paths=[img.image_path for img in images_from_search],
             sources=sources,
-            query_optimization=opt_info,
             timestamp=datetime.utcnow()
         )
         
@@ -405,7 +411,7 @@ class ChatController:
                 section_title=img.section_title or "",
                 caption=img.caption or "",
                 image_path=img.image_path,
-                score=0.0  # Score already used in ranking
+                score=0.0
             )
             for img in images_from_search
         ]
@@ -519,6 +525,20 @@ class ChatController:
         optimizer = get_query_optimizer()
         optimized_query = await optimizer.optimize_query(message)
 
+        # Attach optimization data to the USER message in DB
+        opt_info = QueryOptimizationInfo(
+            rewritten_query=optimized_query.rewritten_query,
+            sub_queries=optimized_query.sub_queries,
+            hyde_document=optimized_query.hyde_document,
+            metadata_filters=optimized_query.metadata_filters,
+            is_searchable=optimized_query.is_searchable,
+        )
+        await self.chat_repo.update_message_optimization(
+            chat_id=chat_id,
+            message_id=user_message_id,
+            optimization_data=opt_info.model_dump(),
+        )
+
         if not is_relevant or not optimized_query.is_searchable:
             logger.info("Message irrelevant or not searchable (stream). Using direct path.")
             full_answer = ""
@@ -631,13 +651,6 @@ class ChatController:
         logger.info(f"Retaining all {len(sources)} sources without filtering.")
 
         # STEP 8: Save assistant message
-        opt_info = QueryOptimizationInfo(
-            rewritten_query=optimized_query.rewritten_query,
-            sub_queries=optimized_query.sub_queries,
-            hyde_document=optimized_query.hyde_document,
-            metadata_filters=optimized_query.metadata_filters,
-            is_searchable=optimized_query.is_searchable,
-        )
         assistant_message_id = f"msg_{uuid.uuid4().hex[:12]}"
         assistant_message = ChatMessage(
             message_id=assistant_message_id,
@@ -645,7 +658,6 @@ class ChatController:
             content=answer,
             image_paths=[img.image_path for img in images_from_search],
             sources=sources,
-            query_optimization=opt_info,
             timestamp=datetime.utcnow()
         )
         await self.chat_repo.add_message(chat_id, assistant_message)
