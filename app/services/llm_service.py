@@ -532,7 +532,7 @@ class LLMService:
         ]
 
         # --- Logging the exact input sent to LLM ---
-        self._log_llm_request(messages)
+        # self._log_llm_request(messages)
 
         try:
             response = await self._call_with_retry(
@@ -562,7 +562,7 @@ class LLMService:
         ]
 
         # --- Logging the exact input sent to LLM ---
-        self._log_llm_request(messages)
+        # self._log_llm_request(messages)
 
         try:
             response = await self._call_with_retry(
@@ -655,7 +655,7 @@ class LLMService:
                 messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": user_content})
 
-        self._log_llm_request(messages)
+        # self._log_llm_request(messages)
 
         if retrieved_images or has_user_images:
             try:
@@ -901,7 +901,7 @@ class LLMService:
                 messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": user_content})
 
-        self._log_llm_request(messages)
+        # self._log_llm_request(messages)
 
         if retrieved_images or has_user_images:
             try:
@@ -942,7 +942,7 @@ class LLMService:
                 )
             })
 
-            self._log_llm_request(fallback_messages)
+            # self._log_llm_request(fallback_messages)
 
             stream = await self._call_with_retry(
                 client=self.client,
