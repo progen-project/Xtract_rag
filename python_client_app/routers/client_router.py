@@ -20,7 +20,7 @@ from python_client_app.services.rag_client import RAGClientService
 from python_client_app.schemas.batch import BatchStatusResponse, TerminateBatchResponse
 from python_client_app.schemas.category import CategoryResponse, CategoryCreate, CategoryUpdate
 from python_client_app.schemas.chat import ChatRequest, ChatResponse, ChatSession
-from python_client_app.schemas.document import DocumentResponse, UploadResponse
+from python_client_app.schemas.document import DocumentResponse, UploadResponse, ParsedMarkdownFileResponse
 from python_client_app.schemas.query import (
     QueryRequest, QueryResponse,
     ImageSearchRequest, ImageSearchResponse,
@@ -106,6 +106,32 @@ async def upload_documents(
     # رفع document يغير documents + categories
     data = [r if isinstance(r, dict) else r.dict() for r in result]
     return JSONResponse(content=jsonable_encoder(data), headers={"X-Cache-Invalidate": "documents,categories"})
+
+
+@router.post("/documents/parse", response_model=List[ParsedMarkdownFileResponse], tags=["Documents"])
+async def parse_documents(
+    files: List[UploadFile] = File(...),
+):
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one PDF file is required")
+
+    file_list = []
+    try:
+        for index, file in enumerate(files):
+            await file.seek(0)
+            file_list.append((
+                "files",
+                (
+                    file.filename or f"document_{index + 1}.pdf",
+                    file.file,
+                    file.content_type or "application/pdf"
+                )
+            ))
+
+        return await rag_service.parse_documents(file_list)
+    finally:
+        for file in files:
+            await file.close()
 
 
 @router.delete("/documents/{document_id}", tags=["Documents"])

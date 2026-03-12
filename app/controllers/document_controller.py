@@ -6,21 +6,29 @@ from pathlib import Path
 import logging
 import uuid
 
+from fastapi import UploadFile
+from starlette.concurrency import run_in_threadpool
+
 from app.repositories import DocumentRepository, CategoryRepository, ChunkRepository
 from app.schemas import (
     DocumentMetadata, 
     DocumentStatus, 
     DocumentUploadResponse,
+    ParsedMarkdownFile,
     ExtractedImage,
     ExtractedTable
 )
 from app.utils.exceptions import (
     DocumentNotFoundError, 
     CategoryNotFoundError, 
-    ProcessingError
+    ProcessingError,
+    ValidationError
 )
 
 logger = logging.getLogger(__name__)
+
+MAX_PARSE_FILES_PER_REQUEST = 10
+UPLOAD_WRITE_CHUNK_SIZE = 1024 * 1024
 
 
 class DocumentController:
@@ -134,7 +142,6 @@ class DocumentController:
                 )
             
             # Offload blocking PDF parsing
-            from starlette.concurrency import run_in_threadpool
             parsed = await run_in_threadpool(
                 self.pdf_parser.parse_document,
                 document.file_path, 
@@ -359,13 +366,104 @@ class DocumentController:
                 str(e)
             )
             raise ProcessingError(str(e))
-    
+
+    async def parse_documents_to_markdown(
+        self,
+        files: List[UploadFile]
+    ) -> List[ParsedMarkdownFile]:
+        """
+        Parse uploaded PDFs into markdown without storing or indexing them.
+
+        Files are processed sequentially and cleaned up immediately to avoid
+        overloading the server with concurrent Docling jobs or leftover temp data.
+        """
+        if len(files) > MAX_PARSE_FILES_PER_REQUEST:
+            raise ValidationError(
+                f"Maximum {MAX_PARSE_FILES_PER_REQUEST} files allowed per parse request"
+            )
+
+        request_dir = self.settings.upload_dir / "_parser_temp" / uuid.uuid4().hex
+        request_dir.mkdir(parents=True, exist_ok=True)
+
+        results: List[ParsedMarkdownFile] = []
+
+        try:
+            for index, file in enumerate(files):
+                pdf_filename = file.filename or f"document_{index + 1}.pdf"
+                md_filename = f"{Path(pdf_filename).stem or f'document_{index + 1}'}.md"
+
+                if not pdf_filename.lower().endswith(".pdf"):
+                    results.append(
+                        ParsedMarkdownFile(
+                            pdf_filename=pdf_filename,
+                            md_filename=md_filename,
+                            status="failed",
+                            detail="File is not a PDF"
+                        )
+                    )
+                    await file.close()
+                    continue
+
+                temp_path = request_dir / f"{uuid.uuid4().hex}_{Path(pdf_filename).name}"
+
+                try:
+                    await self._write_upload_to_disk(file, temp_path)
+                    parsed = await run_in_threadpool(
+                        self.pdf_parser.parse_to_markdown,
+                        str(temp_path)
+                    )
+                    results.append(
+                        ParsedMarkdownFile(
+                            pdf_filename=pdf_filename,
+                            md_filename=md_filename,
+                            markdown=parsed.get("markdown", ""),
+                            status="completed",
+                            page_count=parsed.get("page_count")
+                        )
+                    )
+                except Exception as e:
+                    logger.error(f"Markdown parsing failed for {pdf_filename}: {e}")
+                    results.append(
+                        ParsedMarkdownFile(
+                            pdf_filename=pdf_filename,
+                            md_filename=md_filename,
+                            status="failed",
+                            detail=str(e)
+                        )
+                    )
+                finally:
+                    await file.close()
+                    if temp_path.exists():
+                        try:
+                            temp_path.unlink()
+                        except Exception as cleanup_error:
+                            logger.warning(f"Failed to delete temp file {temp_path}: {cleanup_error}")
+
+            return results
+        finally:
+            try:
+                request_dir.rmdir()
+            except OSError:
+                logger.debug(f"Parser temp directory not empty or already removed: {request_dir}")
+
     async def get_document(self, document_id: str) -> DocumentMetadata:
         """Get a document by ID."""
         document = await self.document_repo.get_by_id(document_id)
         if not document:
             raise DocumentNotFoundError(document_id)
         return document
+
+    async def _write_upload_to_disk(self, file: UploadFile, destination: Path) -> None:
+        """Persist an UploadFile in chunks to avoid loading large PDFs into memory."""
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        await file.seek(0)
+
+        with open(destination, "wb") as output_file:
+            while True:
+                chunk = await file.read(UPLOAD_WRITE_CHUNK_SIZE)
+                if not chunk:
+                    break
+                output_file.write(chunk)
     
     async def list_documents(
         self, 

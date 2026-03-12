@@ -17,9 +17,21 @@ from app.core.dependencies import (
 )
 from app.controllers import DocumentController, CategoryController
 from app.services.status import ProcessingStatusManager
-from app.schemas import DocumentMetadata, DocumentUploadResponse
+from app.schemas import DocumentMetadata, DocumentUploadResponse, ParsedMarkdownFile
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
+
+
+@router.post("/parse", response_model=List[ParsedMarkdownFile])
+async def parse_documents_to_markdown(
+    files: List[UploadFile] = File(...),
+    controller: DocumentController = Depends(get_document_controller)
+):
+    """Parse PDF files into markdown without storing or indexing them."""
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one PDF file is required")
+
+    return await controller.parse_documents_to_markdown(files)
 
 
 @router.post("/upload/{category_id}", response_model=List[DocumentUploadResponse])

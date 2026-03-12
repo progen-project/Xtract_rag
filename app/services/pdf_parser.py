@@ -134,6 +134,37 @@ class DoclingParser:
             "markdown": markdown,
             "document": doc  # Keep for image extraction
         }
+
+    def parse_to_markdown(self, pdf_path: str) -> Dict[str, Any]:
+        """
+        Parse a PDF and return markdown only.
+
+        This lighter path avoids the extra section/table extraction work used
+        by the full ingestion pipeline and is intended for parser-only requests.
+        """
+        self._ensure_initialized()
+
+        logger.info(f"Parsing PDF to markdown with Docling: {pdf_path}")
+
+        result = self._converter.convert(pdf_path)
+        doc = result.document
+
+        markdown_raw = doc.export_to_markdown()
+        markdown = strip_base64_images_from_markdown(markdown_raw)
+
+        size_before = len(markdown_raw)
+        size_after = len(markdown)
+        if size_before > size_after and size_before > 0:
+            logger.info(
+                f"Stripped base64 images from markdown-only parse: "
+                f"{size_before} -> {size_after} bytes "
+                f"({100 * (1 - size_after / size_before):.1f}% reduction)"
+            )
+
+        return {
+            "markdown": markdown,
+            "page_count": self._extract_page_count(doc)
+        }
     
     def _extract_toc(self, doc) -> List[TOCEntry]:
         """Extract table of contents from Docling document."""
@@ -358,6 +389,17 @@ class DoclingParser:
                 rows.append(cells)
         
         return headers, rows
+
+    def _extract_page_count(self, doc) -> Optional[int]:
+        """Best-effort page count extraction from a Docling document."""
+        pages = getattr(doc, "pages", None)
+        if pages is None:
+            return None
+
+        try:
+            return len(pages)
+        except TypeError:
+            return None
 
 
 # Singleton instance

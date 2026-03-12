@@ -42,6 +42,16 @@ class DocumentUploadResponse(BaseModel):
     batch_id: Optional[str] = None
 
 
+class ParsedMarkdownFile(BaseModel):
+    """Markdown parsing result for a single PDF file."""
+    pdf_filename: str
+    md_filename: str
+    markdown: Optional[str] = None
+    status: str
+    detail: Optional[str] = None
+    page_count: Optional[int] = None
+
+
 class ExtractedImage(BaseModel):
     """Extracted image from PDF (metadata only, content on disk)."""
     image_id: str

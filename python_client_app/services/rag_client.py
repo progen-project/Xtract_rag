@@ -9,7 +9,12 @@ from datetime import datetime
 
 from python_client_app.config import ClientConfig
 from python_client_app.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
-from python_client_app.schemas.document import DocumentResponse, UploadResponse, DocumentStatus
+from python_client_app.schemas.document import (
+    DocumentResponse,
+    UploadResponse,
+    ParsedMarkdownFileResponse,
+    DocumentStatus,
+)
 from python_client_app.schemas.batch import BatchStatusResponse, TerminateBatchResponse
 from python_client_app.schemas.chat import ChatRequest, ChatResponse, ChatSession
 from python_client_app.schemas.query import (
@@ -73,6 +78,12 @@ class RAGClientService:
             resp = await client.post(endpoint, files=files)
             resp.raise_for_status()
             return [UploadResponse(**item) for item in resp.json()]
+
+    async def parse_documents(self, files: List[tuple]) -> List[ParsedMarkdownFileResponse]:
+        async with await self._get_client() as client:
+            resp = await client.post("/documents/parse", files=files, timeout=300.0)
+            resp.raise_for_status()
+            return [ParsedMarkdownFileResponse(**item) for item in resp.json()]
 
     async def delete_document(self, document_id: str) -> Dict[str, str]:
         async with await self._get_client() as client:

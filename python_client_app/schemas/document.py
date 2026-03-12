@@ -36,3 +36,13 @@ class UploadResponse(BaseModel):
     status: str
     batch_id: str
     message: str
+
+
+class ParsedMarkdownFileResponse(BaseModel):
+    """Response DTO for parser-only markdown conversion."""
+    pdf_filename: str
+    md_filename: str
+    markdown: Optional[str] = None
+    status: str
+    detail: Optional[str] = None
+    page_count: Optional[int] = None
